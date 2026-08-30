@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .engine.pipeline import run as run_pipeline
 from .report import load_truth, render_console, score, write_json
+from .report_html import write_html
 
 
 def main(argv=None):
@@ -70,11 +71,14 @@ def main(argv=None):
     outdir = Path(a.out)
     outdir.mkdir(parents=True, exist_ok=True)
     write_json(outdir / "run.json", metrics, findings, timing)
+    write_html(outdir / "report.html", metrics, findings, timing,
+               units, agent, dataset=str(datadir))
     if agent:
         (outdir / "agent.json").write_text(json.dumps(agent, indent=2),
                                            encoding="utf-8")
     if not a.quiet:
         print(f"\nwrote {outdir / 'run.json'}")
+        print(f"wrote {outdir / 'report.html'}   <- open this in a browser")
 
     return 0 if metrics["false_clear_count"] == 0 else 1
 

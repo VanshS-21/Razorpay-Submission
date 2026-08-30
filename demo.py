@@ -58,7 +58,8 @@ def main() -> int:
         print("RESULT: zero false clears on both sets.")
     else:
         print("RESULT: FALSE CLEARS PRESENT -- see the exception lists above.")
-    print("Read eval/metrics.md for the full numbers and their caveats.")
+    print("Open  out/report.html  in a browser for the visual report.")
+    print("Read  eval/metrics.md   for the full numbers and their caveats.")
     print("=" * 74)
     return 0 if (rc_main == 0 and rc_hold == 0) else 1
 

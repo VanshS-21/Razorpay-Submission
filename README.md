@@ -207,12 +207,20 @@ setl_4TC0N0K4440284  ledger_mismatch                   Rs 0.00
 Note the `Rs 0.00` delta. Every total balances. This is exactly the case a
 bank-versus-payout reconciliation is blind to.
 
+`out/report.html` renders the same thing for a human: the false-clear rate
+first and largest with a pass/fail verdict, then the exception list as cards,
+each carrying its action. Settlements that balance perfectly but still escalate
+get an explicit callout, because "delta Rs 0.00" next to "needs a human" looks
+like a bug until you know it is the entire point. Single file, no CDN, no
+webfont, light and dark, and it prints.
+
 ---
 
 ## Running it
 
 ```bash
 python demo.py                      # everything, one command
+open out/report.html                # visual report (self-contained, offline)
 python -m pytest tests/ -q          # 72 tests
 python eval/run_eval.py             # regenerate eval/metrics.md
 ```
@@ -295,6 +303,7 @@ src/recon/
     narrate.py         exception notes for humans
     llm.py             client, model config, token and cost accounting
   report.py            scoring; false-clear rate first, always
+  report_html.py       self-contained HTML report; no CDN, no webfont
 eval/run_eval.py       regenerates eval/metrics.md
 docs/FAILURE_LOG.md    what broke, kept live rather than reconstructed
 ```
