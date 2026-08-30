@@ -59,6 +59,7 @@ DEFAULT_WEIGHTS: dict[AnomalyClass, int] = {
     AnomalyClass.SPLIT_REFUND: 5,
     AnomalyClass.BANK_CHARGE_ADJUSTMENT: 4,
     AnomalyClass.CONSOLIDATED_PAYOUT: 6,
+    AnomalyClass.LEDGER_MISMATCH: 6,
     AnomalyClass.TRUE_MISMATCH: 6,
 }
 
@@ -252,6 +253,40 @@ class Generator:
 
     # -- main loop ---------------------------------------------------------
 
+    def _add_distractors(self, n: int):
+        """Bank rows that have nothing to do with Razorpay settlements.
+
+        A real current account carries payroll, vendor payments, other payment
+        gateways and customer transfers. Without them the statement is a list of
+        answers and the matcher is never tested on its willingness to leave a row
+        alone. Some of these deliberately mention Razorpay, so rejecting them
+        cannot be done on the merchant name alone.
+        """
+        templates = [
+            ("NEFT CR-ICIC0000123-CASHFREE PAYMENTS INDIA PVT LTD-{ref}", "credit"),
+            ("IMPS/{ref}/PHONEPE PAYMENT SERVICES PVT LTD", "credit"),
+            ("UPI-{ref}-CUSTOMER DIRECT TRANSFER", "credit"),
+            ("NEFT DR-{ref}-VENDOR PAYMENT-SUPPLIES", "debit"),
+            ("SALARY DISBURSEMENT JUN2026 BATCH {ref}", "debit"),
+            ("NEFT DR-RAZORPAY SOFTWARE PVT LTD-{ref}-SUBSCRIPTION FEE", "debit"),
+            ("NEFT CR-RAZORPAY SOFTWARE PVT LTD-{ref}-INSTANT SETTLEMENT ADVANCE", "credit"),
+            ("ACH DR-GST PAYMENT-{ref}", "debit"),
+        ]
+        base = self.start
+        for _ in range(n):
+            tmpl, kind = self.rng.choice(templates)
+            ref = f"{self.rng.randint(10**9, 10**10 - 1)}x{self.rng.randint(100, 999)}"
+            amt = self.rng.randint(50_000, 8_000_000)
+            d = base + timedelta(days=self.rng.randint(0, max(1, self.n_settlements - 1)))
+            self.bank.append(BankCredit(
+                txn_id=self._id("btxn"),
+                value_date=d.isoformat(),
+                narration=tmpl.format(ref=ref),
+                ref_no=ref,
+                debit=amt if kind == "debit" else 0,
+                credit=amt if kind == "credit" else 0,
+            ))
+
     def run(self):
         schedule = allocate(self.n_settlements, self.weights)
         self.rng.shuffle(schedule)
@@ -262,6 +297,10 @@ class Generator:
                 self._build_consolidated(d)
             else:
                 self._build_settlement(self._id("setl"), self._utr(), d, cls)
+
+        # Roughly one unrelated row for every four settlement payouts.
+        self._add_distractors(max(4, self.n_settlements // 4))
+        self.bank.sort(key=lambda b: (b.value_date, b.txn_id))
 
         return self.lines, self.bank, list(self.orders.values()), self.truth
 
@@ -356,6 +395,23 @@ class Generator:
                 lines.append(self._dispute_line(setl_id, utr, d, oid, pid, amt))
                 note = f"Chargeback on {oid} plus Rs 1,500 handling fee deducted from payout"
 
+        elif cls is AnomalyClass.LEDGER_MISMATCH:
+            # Two payment lines are wrong by equal and opposite amounts. The
+            # settlement total is untouched, the bank credit ties to the paise,
+            # and every single-axis check passes. Only comparing each line back
+            # to the order ledger finds it.
+            if len(lines) >= 2:
+                a, b = self.rng.sample([l for l in lines
+                                        if l.type is EntityType.PAYMENT], 2)
+                shift = self.rng.randint(5_000, 80_000)   # Rs 50 - Rs 800
+                a.amount += shift
+                a.credit += shift
+                b.amount -= shift
+                b.credit -= shift
+                note = (f"Orders {a.order_id} and {b.order_id} misstated by "
+                        f"{shift} paise in opposite directions; settlement total "
+                        f"unaffected")
+
         elif cls is AnomalyClass.SPLIT_REFUND:
             if prior_orders:
                 oid, pid, amt = self.rng.choice(prior_orders)
@@ -407,15 +463,33 @@ class Generator:
             note = "Same UTR credited twice by the bank; second credit is unearned"
 
         elif cls is AnomalyClass.BANK_CHARGE_ADJUSTMENT:
+            # The charge is levied as its OWN debit row carrying the same UTR --
+            # which is how it appears on a real statement, and which is the only
+            # thing distinguishing it from a shortfall of the same size.
             charge = self.rng.choice([500, 1000, 1770, 2360, 5900])  # Rs 5 - Rs 59
-            credit_amount = expected_net - charge
+            extra_rows.append(BankCredit(
+                txn_id=self._id("btxn"),
+                value_date=value_date.isoformat(),
+                narration=self.rng.choice([
+                    "NEFT CHARGES INCL GST",
+                    "RTGS OUTWARD CHARGES + GST",
+                    "FUND TRANSFER CHARGES",
+                ]),
+                ref_no=utr,
+                debit=charge,
+                credit=0,
+            ))
             injected = -charge
-            note = f"Bank levied a transfer charge of {charge} paise not present in the PSP report"
+            note = f"Bank levied a transfer charge of {charge} paise, itemised as a separate debit"
 
         elif cls is AnomalyClass.TRUE_MISMATCH:
-            # A material, unexplained difference. Nothing in any source accounts
-            # for it. The only correct behaviour is to refuse to clear it.
-            gap = self.rng.randint(10_000, 500_000)
+            # Deliberately overlapping the bank-charge magnitude band. If true
+            # mismatches were always larger than any plausible charge, a size
+            # threshold would separate them and the engine would look far better
+            # than it is. Forcing the overlap means the engine has to seek
+            # CORROBORATING EVIDENCE -- an itemised charge row -- rather than
+            # guessing from magnitude.
+            gap = self.rng.randint(2_000, 500_000)   # Rs 20 - Rs 5,000
             if self.rng.random() < 0.5:
                 gap = -gap
             credit_amount = expected_net + gap

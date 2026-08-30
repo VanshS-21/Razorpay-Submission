@@ -14,3 +14,6 @@ dev = ["pytest>=8"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+# Project-local temp dir: the system temp path is not always writable on
+# Windows, and the suite should not depend on the machine it runs on.
+addopts = "--basetemp=.scratch/pytest"

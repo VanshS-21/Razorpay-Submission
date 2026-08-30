@@ -67,6 +67,12 @@ class AnomalyClass(str, Enum):
     #: the sum of an unknown subset of settlements, which is why the engine
     #: needs a subset-sum solver rather than a lookup.
     CONSOLIDATED_PAYOUT = "consolidated_payout"
+    #: Line-level amounts disagree with the order ledger while the settlement
+    #: total still ties, because the individual errors offset. Invisible to any
+    #: engine that only checks whether the bank credit matches the payout -- it
+    #: is the case that makes the THIRD source load-bearing rather than
+    #: decorative.
+    LEDGER_MISMATCH = "ledger_mismatch"
     TRUE_MISMATCH = "true_mismatch"
 
 
@@ -85,6 +91,7 @@ class Disposition(str, Enum):
 MUST_ESCALATE: frozenset = frozenset({
     AnomalyClass.TRUE_MISMATCH,
     AnomalyClass.DUPLICATE_BANK_CREDIT,
+    AnomalyClass.LEDGER_MISMATCH,
 })
 
 

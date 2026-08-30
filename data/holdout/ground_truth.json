@@ -1,0 +1,170 @@
+[
+  {
+    "settlement_id": "setl_ZLX0ZV1PZG0001",
+    "true_class": "missing_utr",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "COMPOUND [missing_utr + bank_charge_adjustment]: payout is fully explained; only its reference is unusable"
+  },
+  {
+    "settlement_id": "setl_MZP9DRGUWU0031",
+    "true_class": "missing_utr",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "COMPOUND [missing_utr + bank_charge_adjustment]: payout is fully explained; only its reference is unusable"
+  },
+  {
+    "settlement_id": "setl_3B3NT7VS0H0052",
+    "true_class": "missing_utr",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "COMPOUND [missing_utr + bank_charge_adjustment]: payout is fully explained; only its reference is unusable"
+  },
+  {
+    "settlement_id": "setl_3D0D0Q3W9S0079",
+    "true_class": "missing_utr",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "COMPOUND [missing_utr + bank_charge_adjustment]: payout is fully explained; only its reference is unusable"
+  },
+  {
+    "settlement_id": "setl_8M9KYWZBTE0094",
+    "true_class": "consolidated_payout",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "COMPOUND [consolidated_payout + bank_charge_adjustment]: jointly transferred with setl_37VDHW00JV0110, net of a transfer charge"
+  },
+  {
+    "settlement_id": "setl_37VDHW00JV0110",
+    "true_class": "consolidated_payout",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "COMPOUND [consolidated_payout + bank_charge_adjustment]: jointly transferred with setl_8M9KYWZBTE0094, net of a transfer charge"
+  },
+  {
+    "settlement_id": "setl_JEGSG6S4H50128",
+    "true_class": "consolidated_payout",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "COMPOUND [consolidated_payout + bank_charge_adjustment]: jointly transferred with setl_JHNCPXP9FE0150, net of a transfer charge"
+  },
+  {
+    "settlement_id": "setl_JHNCPXP9FE0150",
+    "true_class": "consolidated_payout",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "COMPOUND [consolidated_payout + bank_charge_adjustment]: jointly transferred with setl_JEGSG6S4H50128, net of a transfer charge"
+  },
+  {
+    "settlement_id": "setl_Y3AGZW76X70168",
+    "true_class": "consolidated_payout",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "COMPOUND [consolidated_payout + bank_charge_adjustment]: jointly transferred with setl_Z2H51QV5PS0181, net of a transfer charge"
+  },
+  {
+    "settlement_id": "setl_Z2H51QV5PS0181",
+    "true_class": "consolidated_payout",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "COMPOUND [consolidated_payout + bank_charge_adjustment]: jointly transferred with setl_Y3AGZW76X70168, net of a transfer charge"
+  },
+  {
+    "settlement_id": "setl_91P3RG4JNE0202",
+    "true_class": "consolidated_payout",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "COMPOUND [consolidated_payout + bank_charge_adjustment]: jointly transferred with setl_QZJ6665KGK0224, net of a transfer charge"
+  },
+  {
+    "settlement_id": "setl_QZJ6665KGK0224",
+    "true_class": "consolidated_payout",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "COMPOUND [consolidated_payout + bank_charge_adjustment]: jointly transferred with setl_91P3RG4JNE0202, net of a transfer charge"
+  },
+  {
+    "settlement_id": "setl_WYKKG6ZPZU0242",
+    "true_class": "ledger_mismatch",
+    "expected_disposition": "exception",
+    "injected_delta": 0,
+    "note": "COMPOUND [refund_netted_later + phantom_refund]: refund debited for order_8M3B39VGWU0023, which the order ledger still records as paid and never refunded"
+  },
+  {
+    "settlement_id": "setl_R11HQWZTU10269",
+    "true_class": "ledger_mismatch",
+    "expected_disposition": "exception",
+    "injected_delta": 0,
+    "note": "COMPOUND [refund_netted_later + phantom_refund]: refund debited for order_MA88MNZ6HB0185, which the order ledger still records as paid and never refunded"
+  },
+  {
+    "settlement_id": "setl_4TC0N0K4440284",
+    "true_class": "ledger_mismatch",
+    "expected_disposition": "exception",
+    "injected_delta": 0,
+    "note": "COMPOUND [refund_netted_later + phantom_refund]: refund debited for order_JECZYYKK6G0212, which the order ledger still records as paid and never refunded"
+  },
+  {
+    "settlement_id": "setl_JWVGWWHTRA0314",
+    "true_class": "ledger_mismatch",
+    "expected_disposition": "exception",
+    "injected_delta": 0,
+    "note": "COMPOUND [refund_netted_later + phantom_refund]: refund debited for order_GLZB1EF8RH0141, which the order ledger still records as paid and never refunded"
+  },
+  {
+    "settlement_id": "setl_VM5FJAW01N0344",
+    "true_class": "duplicate_bank_credit",
+    "expected_disposition": "exception",
+    "injected_delta": 0,
+    "note": "COMPOUND [duplicate_bank_credit + ledger_mismatch]: unearned duplicate credit over a misstated line"
+  },
+  {
+    "settlement_id": "setl_NWPTF01AGV0362",
+    "true_class": "duplicate_bank_credit",
+    "expected_disposition": "exception",
+    "injected_delta": 0,
+    "note": "COMPOUND [duplicate_bank_credit + ledger_mismatch]: unearned duplicate credit over a misstated line"
+  },
+  {
+    "settlement_id": "setl_VYN0DYXJZC0377",
+    "true_class": "duplicate_bank_credit",
+    "expected_disposition": "exception",
+    "injected_delta": 0,
+    "note": "COMPOUND [duplicate_bank_credit + ledger_mismatch]: unearned duplicate credit over a misstated line"
+  },
+  {
+    "settlement_id": "setl_8RN30CA0P60395",
+    "true_class": "duplicate_bank_credit",
+    "expected_disposition": "exception",
+    "injected_delta": 0,
+    "note": "COMPOUND [duplicate_bank_credit + ledger_mismatch]: unearned duplicate credit over a misstated line"
+  },
+  {
+    "settlement_id": "setl_ZJ89LKSN3T0416",
+    "true_class": "true_mismatch",
+    "expected_disposition": "exception",
+    "injected_delta": 0,
+    "note": "COMPOUND [chargeback_deduction + true_mismatch]: chargeback is real, but does not account for the shortfall"
+  },
+  {
+    "settlement_id": "setl_ZX7ZN16HA10446",
+    "true_class": "true_mismatch",
+    "expected_disposition": "exception",
+    "injected_delta": 0,
+    "note": "COMPOUND [chargeback_deduction + true_mismatch]: chargeback is real, but does not account for the shortfall"
+  },
+  {
+    "settlement_id": "setl_C3K931Z68V0470",
+    "true_class": "true_mismatch",
+    "expected_disposition": "exception",
+    "injected_delta": 0,
+    "note": "COMPOUND [chargeback_deduction + true_mismatch]: chargeback is real, but does not account for the shortfall"
+  },
+  {
+    "settlement_id": "setl_HPX6W6WE1N0488",
+    "true_class": "true_mismatch",
+    "expected_disposition": "exception",
+    "injected_delta": 0,
+    "note": "COMPOUND [chargeback_deduction + true_mismatch]: chargeback is real, but does not account for the shortfall"
+  }
+]

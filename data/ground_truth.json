@@ -24,868 +24,861 @@
     "settlement_id": "setl_PQXKATKJSM0089",
     "true_class": "true_mismatch",
     "expected_disposition": "exception",
-    "injected_delta": -276594,
+    "injected_delta": -268594,
     "note": "Material unexplained difference between payout and bank credit"
   },
   {
     "settlement_id": "setl_EUG89CXJ0K0118",
-    "true_class": "duplicate_bank_credit",
-    "expected_disposition": "exception",
-    "injected_delta": 4664518,
-    "note": "Same UTR credited twice by the bank; second credit is unearned"
-  },
-  {
-    "settlement_id": "setl_NB4W2K2P280160",
-    "true_class": "clean",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "All three sources agree"
-  },
-  {
-    "settlement_id": "setl_6K5Z26PRF90174",
-    "true_class": "duplicate_bank_credit",
-    "expected_disposition": "exception",
-    "injected_delta": 2796637,
-    "note": "Same UTR credited twice by the bank; second credit is unearned"
-  },
-  {
-    "settlement_id": "setl_7XS775LYLJ0192",
-    "true_class": "duplicate_bank_credit",
-    "expected_disposition": "exception",
-    "injected_delta": 13656207,
-    "note": "Same UTR credited twice by the bank; second credit is unearned"
-  },
-  {
-    "settlement_id": "setl_TVT7KEL3T20207",
     "true_class": "split_refund",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
-    "note": "Order order_EA5GEP8SJY0017 refunded in two parts across consecutive settlements"
+    "note": "Order order_VXYAMK1EKB0099 refunded in two parts across consecutive settlements"
   },
   {
-    "settlement_id": "setl_AXH3J6EQ0F0238",
-    "true_class": "consolidated_payout",
+    "settlement_id": "setl_6DJ9PW690W0161",
+    "true_class": "clean",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
-    "note": "Paid in one bank transfer jointly with setl_FCQ92Z5FG80257"
+    "note": "All three sources agree"
   },
   {
-    "settlement_id": "setl_FCQ92Z5FG80257",
-    "true_class": "consolidated_payout",
+    "settlement_id": "setl_H6RP1RWU050190",
+    "true_class": "split_refund",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
-    "note": "Paid in one bank transfer jointly with setl_AXH3J6EQ0F0238"
+    "note": "Order order_7G3Z5K3M9T0046 refunded in two parts across consecutive settlements"
   },
   {
-    "settlement_id": "setl_7KDZA3FU6N0283",
-    "true_class": "fee_tax_rounding",
-    "expected_disposition": "reconciled",
-    "injected_delta": 3,
-    "note": "Sub-rupee fee/GST rounding drift between per-line and aggregate totals"
-  },
-  {
-    "settlement_id": "setl_AL867LE7WR0327",
-    "true_class": "timing_cut",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "Payout settled 2026-06-12 but credited 2026-06-14, crossing the period cut-off"
-  },
-  {
-    "settlement_id": "setl_65CCWG9TSM0365",
+    "settlement_id": "setl_4HRPY3LJPP0230",
     "true_class": "duplicate_bank_credit",
     "expected_disposition": "exception",
-    "injected_delta": 11205534,
+    "injected_delta": 19012966,
     "note": "Same UTR credited twice by the bank; second credit is unearned"
   },
   {
-    "settlement_id": "setl_LCZRALFT1Y0383",
+    "settlement_id": "setl_T0J2N9RB0Y0269",
+    "true_class": "split_refund",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "Order order_LE8H98NYYK0108 refunded in two parts across consecutive settlements"
+  },
+  {
+    "settlement_id": "setl_09V2DKJNX20309",
+    "true_class": "ledger_mismatch",
+    "expected_disposition": "exception",
+    "injected_delta": 0,
+    "note": "Orders order_CUZW3HGCAJ0322 and order_G264M0YBJ60325 misstated by 12152 paise in opposite directions; settlement total unaffected"
+  },
+  {
+    "settlement_id": "setl_TD8Q01RF540329",
+    "true_class": "fee_tax_rounding",
+    "expected_disposition": "reconciled",
+    "injected_delta": -1,
+    "note": "Sub-rupee fee/GST rounding drift between per-line and aggregate totals"
+  },
+  {
+    "settlement_id": "setl_W74XVKZW3L0358",
+    "true_class": "timing_cut",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "Payout settled 2026-06-12 but credited 2026-06-13, crossing the period cut-off"
+  },
+  {
+    "settlement_id": "setl_3FESQZFC010381",
+    "true_class": "duplicate_bank_credit",
+    "expected_disposition": "exception",
+    "injected_delta": 12210728,
+    "note": "Same UTR credited twice by the bank; second credit is unearned"
+  },
+  {
+    "settlement_id": "setl_Z1T4MJQGTR0396",
     "true_class": "clean",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "All three sources agree"
   },
   {
-    "settlement_id": "setl_YW65T4JM530406",
+    "settlement_id": "setl_AHR04RCN5G0416",
     "true_class": "clean",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "All three sources agree"
   },
   {
-    "settlement_id": "setl_0MBZRWE0N90423",
+    "settlement_id": "setl_54F8HMJ12W0460",
     "true_class": "chargeback_deduction",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
-    "note": "Chargeback on order_9SYT1FZ15R0196 plus Rs 1,500 handling fee deducted from payout"
+    "note": "Chargeback on order_KEJTW09U580093 plus Rs 1,500 handling fee deducted from payout"
   },
   {
-    "settlement_id": "setl_6KB09CSLDU0444",
+    "settlement_id": "setl_2YUULCVSD60502",
     "true_class": "timing_cut",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "Payout settled 2026-06-17 but credited 2026-06-20, crossing the period cut-off"
   },
   {
-    "settlement_id": "setl_DNU41VU5L30458",
-    "true_class": "split_refund",
+    "settlement_id": "setl_YT83TDEZY40546",
+    "true_class": "bank_charge_adjustment",
     "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "Order order_DFQCM2MC170167 refunded in two parts across consecutive settlements"
+    "injected_delta": -2360,
+    "note": "Bank levied a transfer charge of 2360 paise, itemised as a separate debit"
   },
   {
-    "settlement_id": "setl_HAVCFX5CG90480",
+    "settlement_id": "setl_BX0G3YY2YD0591",
     "true_class": "fee_tax_rounding",
     "expected_disposition": "reconciled",
-    "injected_delta": -2,
+    "injected_delta": 2,
     "note": "Sub-rupee fee/GST rounding drift between per-line and aggregate totals"
   },
   {
-    "settlement_id": "setl_PYDSHDL5160506",
+    "settlement_id": "setl_93UDEC8G830635",
+    "true_class": "missing_utr",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "Bank reference field unusable; identity recoverable only from narration"
+  },
+  {
+    "settlement_id": "setl_SFKV2LDWMB0676",
+    "true_class": "clean",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "All three sources agree"
+  },
+  {
+    "settlement_id": "setl_RNLXVEGB630693",
     "true_class": "chargeback_deduction",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
-    "note": "Chargeback on order_TDS0BTQKX10448 plus Rs 1,500 handling fee deducted from payout"
+    "note": "Chargeback on order_TP8HY3HU790102 plus Rs 1,500 handling fee deducted from payout"
   },
   {
-    "settlement_id": "setl_XRH6PQWYT80545",
+    "settlement_id": "setl_0NRZRNFB2B0738",
+    "true_class": "bank_charge_adjustment",
+    "expected_disposition": "reconciled",
+    "injected_delta": -5900,
+    "note": "Bank levied a transfer charge of 5900 paise, itemised as a separate debit"
+  },
+  {
+    "settlement_id": "setl_JN7M8H4PMN0762",
+    "true_class": "ledger_mismatch",
+    "expected_disposition": "exception",
+    "injected_delta": 0,
+    "note": "Orders order_3XZXWRZ10D0766 and order_24GLFUF0HT0763 misstated by 20571 paise in opposite directions; settlement total unaffected"
+  },
+  {
+    "settlement_id": "setl_ZAHHFH78QB0785",
     "true_class": "clean",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "All three sources agree"
   },
   {
-    "settlement_id": "setl_M5JNM0U7CV0562",
-    "true_class": "refund_netted_later",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "Refund for order order_TDS0BTQKX10448 raised 2026-06-02 but netted into this payout"
-  },
-  {
-    "settlement_id": "setl_5T3D9NZ5KR0598",
-    "true_class": "split_refund",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "Order order_EFUYYTQN510384 refunded in two parts across consecutive settlements"
-  },
-  {
-    "settlement_id": "setl_SR4RZ5FA6J0617",
-    "true_class": "consolidated_payout",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "Paid in one bank transfer jointly with setl_7Y43BLUN6Y0645"
-  },
-  {
-    "settlement_id": "setl_7Y43BLUN6Y0645",
-    "true_class": "consolidated_payout",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "Paid in one bank transfer jointly with setl_SR4RZ5FA6J0617"
-  },
-  {
-    "settlement_id": "setl_0Q1XC4TFLB0671",
+    "settlement_id": "setl_38J678H1AN0802",
     "true_class": "clean",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "All three sources agree"
   },
   {
-    "settlement_id": "setl_PAN1HT87LN0688",
-    "true_class": "clean",
+    "settlement_id": "setl_Q0H7LHQGUY0840",
+    "true_class": "timing_cut",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
-    "note": "All three sources agree"
+    "note": "Payout settled 2026-06-27 but credited 2026-06-28, crossing the period cut-off"
   },
   {
-    "settlement_id": "setl_RZZL93EHKJ0708",
+    "settlement_id": "setl_5CK6KPWC0D0869",
     "true_class": "missing_utr",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "Bank reference field unusable; identity recoverable only from narration"
   },
   {
-    "settlement_id": "setl_P13HQPGYWM0740",
-    "true_class": "missing_utr",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "Bank reference field unusable; identity recoverable only from narration"
-  },
-  {
-    "settlement_id": "setl_121Z07VE2C0754",
+    "settlement_id": "setl_3R1N1D3J0M0883",
     "true_class": "clean",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "All three sources agree"
   },
   {
-    "settlement_id": "setl_P7U0DXKPQD0777",
+    "settlement_id": "setl_TWY1FW7D1V0903",
     "true_class": "timing_cut",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "Payout settled 2026-06-30 but credited 2026-07-01, crossing the period cut-off"
   },
   {
-    "settlement_id": "setl_TG44LJY3AY0809",
+    "settlement_id": "setl_31GSVVM3WJ0932",
     "true_class": "clean",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "All three sources agree"
   },
   {
-    "settlement_id": "setl_JRFTKAAGXF0835",
+    "settlement_id": "setl_0M3DVCYBXS0970",
+    "true_class": "refund_netted_later",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "Refund for order order_WYBVLY4K4C0441 raised 2026-06-25 but netted into this payout"
+  },
+  {
+    "settlement_id": "setl_NCARJ0QNS61000",
+    "true_class": "clean",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "All three sources agree"
+  },
+  {
+    "settlement_id": "setl_8ATCT61CST1035",
+    "true_class": "fee_tax_rounding",
+    "expected_disposition": "reconciled",
+    "injected_delta": 1,
+    "note": "Sub-rupee fee/GST rounding drift between per-line and aggregate totals"
+  },
+  {
+    "settlement_id": "setl_5316RSZX611049",
+    "true_class": "chargeback_deduction",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "Chargeback on order_V1M2RM350M0730 plus Rs 1,500 handling fee deducted from payout"
+  },
+  {
+    "settlement_id": "setl_XU4X4STCJK1088",
+    "true_class": "clean",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "All three sources agree"
+  },
+  {
+    "settlement_id": "setl_3T54KXEMX51117",
+    "true_class": "chargeback_deduction",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "Chargeback on order_7G3Z5K3M9T0046 plus Rs 1,500 handling fee deducted from payout"
+  },
+  {
+    "settlement_id": "setl_AV66SJWZG61132",
+    "true_class": "clean",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "All three sources agree"
+  },
+  {
+    "settlement_id": "setl_G10206JXMG1170",
+    "true_class": "chargeback_deduction",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "Chargeback on order_G264M0YBJ60325 plus Rs 1,500 handling fee deducted from payout"
+  },
+  {
+    "settlement_id": "setl_M4BP0MTK1N1203",
+    "true_class": "clean",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "All three sources agree"
+  },
+  {
+    "settlement_id": "setl_5W1554KK021226",
+    "true_class": "refund_netted_later",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "Refund for order order_B3VKC52Q1J1198 raised 2026-06-24 but netted into this payout"
+  },
+  {
+    "settlement_id": "setl_DZPN3ZET2B1256",
+    "true_class": "refund_netted_later",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "Refund for order order_U57381NSMN0893 raised 2026-06-18 but netted into this payout"
+  },
+  {
+    "settlement_id": "setl_WRNYVNX92T1292",
+    "true_class": "missing_utr",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "Bank reference field unusable; identity recoverable only from narration"
+  },
+  {
+    "settlement_id": "setl_U63LRBNEEG1312",
+    "true_class": "clean",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "All three sources agree"
+  },
+  {
+    "settlement_id": "setl_MALS2F7XKC1347",
+    "true_class": "chargeback_deduction",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "Chargeback on order_PMW5Q5ZXNS1113 plus Rs 1,500 handling fee deducted from payout"
+  },
+  {
+    "settlement_id": "setl_CP52EG4JQP1389",
+    "true_class": "chargeback_deduction",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "Chargeback on order_NZ5GK32FFD0663 plus Rs 1,500 handling fee deducted from payout"
+  },
+  {
+    "settlement_id": "setl_VSF5C0U0LY1416",
+    "true_class": "clean",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "All three sources agree"
+  },
+  {
+    "settlement_id": "setl_U5F9UKZ0RK1439",
+    "true_class": "clean",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "All three sources agree"
+  },
+  {
+    "settlement_id": "setl_WMX6MX0LL11477",
+    "true_class": "bank_charge_adjustment",
+    "expected_disposition": "reconciled",
+    "injected_delta": -1770,
+    "note": "Bank levied a transfer charge of 1770 paise, itemised as a separate debit"
+  },
+  {
+    "settlement_id": "setl_BNZY0EAPYJ1519",
+    "true_class": "ledger_mismatch",
+    "expected_disposition": "exception",
+    "injected_delta": 0,
+    "note": "Orders order_HKTN3YWZ0V1520 and order_YZU3MRS6GJ1526 misstated by 13398 paise in opposite directions; settlement total unaffected"
+  },
+  {
+    "settlement_id": "setl_VXBEHD475H1536",
+    "true_class": "clean",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "All three sources agree"
+  },
+  {
+    "settlement_id": "setl_WSZTDC3SVZ1580",
+    "true_class": "clean",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "All three sources agree"
+  },
+  {
+    "settlement_id": "setl_97EZBZ3MZ51603",
+    "true_class": "refund_netted_later",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "Refund for order order_SZS3ZZRWYE1163 raised 2026-07-09 but netted into this payout"
+  },
+  {
+    "settlement_id": "setl_AB13DE046S1636",
+    "true_class": "duplicate_bank_credit",
+    "expected_disposition": "exception",
+    "injected_delta": 20130950,
+    "note": "Same UTR credited twice by the bank; second credit is unearned"
+  },
+  {
+    "settlement_id": "setl_N5AHTDCYK41681",
+    "true_class": "clean",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "All three sources agree"
+  },
+  {
+    "settlement_id": "setl_NV5UMS2PGB1725",
+    "true_class": "fee_tax_rounding",
+    "expected_disposition": "reconciled",
+    "injected_delta": 2,
+    "note": "Sub-rupee fee/GST rounding drift between per-line and aggregate totals"
+  },
+  {
+    "settlement_id": "setl_P62F8XH1M11766",
+    "true_class": "true_mismatch",
+    "expected_disposition": "exception",
+    "injected_delta": 55229,
+    "note": "Material unexplained difference between payout and bank credit"
+  },
+  {
+    "settlement_id": "setl_640L1EVQP11804",
     "true_class": "fee_tax_rounding",
     "expected_disposition": "reconciled",
     "injected_delta": -3,
     "note": "Sub-rupee fee/GST rounding drift between per-line and aggregate totals"
   },
   {
-    "settlement_id": "setl_9XHM53ZML30876",
+    "settlement_id": "setl_01J4FPY81R1818",
     "true_class": "clean",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "All three sources agree"
   },
   {
-    "settlement_id": "setl_MSELAY6A7R0920",
-    "true_class": "fee_tax_rounding",
-    "expected_disposition": "reconciled",
-    "injected_delta": 3,
-    "note": "Sub-rupee fee/GST rounding drift between per-line and aggregate totals"
-  },
-  {
-    "settlement_id": "setl_B2FJVR8ZJU0934",
-    "true_class": "chargeback_deduction",
+    "settlement_id": "setl_APPADBB90R1859",
+    "true_class": "consolidated_payout",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
-    "note": "Chargeback on order_SYB2HYNMUY0399 plus Rs 1,500 handling fee deducted from payout"
+    "note": "Paid in one bank transfer jointly with setl_U65FLDPZAC1881"
   },
   {
-    "settlement_id": "setl_KBGPW88YP00979",
-    "true_class": "clean",
+    "settlement_id": "setl_U65FLDPZAC1881",
+    "true_class": "consolidated_payout",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
-    "note": "All three sources agree"
+    "note": "Paid in one bank transfer jointly with setl_APPADBB90R1859"
   },
   {
-    "settlement_id": "setl_2BAKG1NVW31011",
-    "true_class": "chargeback_deduction",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "Chargeback on order_ZDT9CEVEP90427 plus Rs 1,500 handling fee deducted from payout"
-  },
-  {
-    "settlement_id": "setl_KMJF2HD4DW1035",
-    "true_class": "clean",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "All three sources agree"
-  },
-  {
-    "settlement_id": "setl_12YP2TWZGW1076",
-    "true_class": "refund_netted_later",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "Refund for order order_EPP3GP3EKB0349 raised 2026-06-26 but netted into this payout"
-  },
-  {
-    "settlement_id": "setl_7RT0DGDXTZ1109",
-    "true_class": "clean",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "All three sources agree"
-  },
-  {
-    "settlement_id": "setl_KRMAJ9KJ6C1126",
-    "true_class": "refund_netted_later",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "Refund for order order_RF544F74WH0328 raised 2026-06-29 but netted into this payout"
-  },
-  {
-    "settlement_id": "setl_S7FMS1NQYF1171",
-    "true_class": "refund_netted_later",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "Refund for order order_N3FUQC6YR00930 raised 2026-06-17 but netted into this payout"
-  },
-  {
-    "settlement_id": "setl_YXFZEMJV1K1210",
+    "settlement_id": "setl_3HRZKFWDH21901",
     "true_class": "missing_utr",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "Bank reference field unusable; identity recoverable only from narration"
   },
   {
-    "settlement_id": "setl_BJW0K1ZA3M1227",
+    "settlement_id": "setl_BS991QMDXZ1918",
+    "true_class": "missing_utr",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "Bank reference field unusable; identity recoverable only from narration"
+  },
+  {
+    "settlement_id": "setl_TDNLGEYQXY1947",
     "true_class": "clean",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "All three sources agree"
   },
   {
-    "settlement_id": "setl_JWBHDW6ZKW1241",
-    "true_class": "chargeback_deduction",
+    "settlement_id": "setl_Q4VTTE7LQT1970",
+    "true_class": "fee_tax_rounding",
     "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "Chargeback on order_B1BF3J5MDS0040 plus Rs 1,500 handling fee deducted from payout"
+    "injected_delta": 2,
+    "note": "Sub-rupee fee/GST rounding drift between per-line and aggregate totals"
   },
   {
-    "settlement_id": "setl_6C7C7WYBS61271",
-    "true_class": "chargeback_deduction",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "Chargeback on order_U26JPKT9420528 plus Rs 1,500 handling fee deducted from payout"
-  },
-  {
-    "settlement_id": "setl_MKMRAWLT8B1313",
+    "settlement_id": "setl_SK8FXAN4CH1993",
     "true_class": "clean",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "All three sources agree"
   },
   {
-    "settlement_id": "setl_XVFRL6EWD31333",
+    "settlement_id": "setl_WEE6CYF6RL2025",
     "true_class": "clean",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "All three sources agree"
   },
   {
-    "settlement_id": "setl_R87TNM2CAZ1347",
-    "true_class": "split_refund",
+    "settlement_id": "setl_V4SD0SZPGW2054",
+    "true_class": "missing_utr",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
-    "note": "Order order_KDR8D3YNNN0701 refunded in two parts across consecutive settlements"
+    "note": "Bank reference field unusable; identity recoverable only from narration"
   },
   {
-    "settlement_id": "setl_77T3DSA35L1378",
-    "true_class": "consolidated_payout",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "Paid in one bank transfer jointly with setl_LP43M4TWSP1397"
-  },
-  {
-    "settlement_id": "setl_LP43M4TWSP1397",
-    "true_class": "consolidated_payout",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "Paid in one bank transfer jointly with setl_77T3DSA35L1378"
-  },
-  {
-    "settlement_id": "setl_F60V2TU8981417",
+    "settlement_id": "setl_1N8Y1S2EU42071",
     "true_class": "clean",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "All three sources agree"
   },
   {
-    "settlement_id": "setl_FLA0HQ3R8W1455",
-    "true_class": "clean",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "All three sources agree"
-  },
-  {
-    "settlement_id": "setl_0AF9R2S7LP1496",
+    "settlement_id": "setl_JF96Q9TTSC2115",
     "true_class": "refund_netted_later",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
-    "note": "Refund for order order_600CT0XZ831214 raised 2026-07-17 but netted into this payout"
+    "note": "Refund for order order_WY1JZ8GWR50149 raised 2026-08-03 but netted into this payout"
   },
   {
-    "settlement_id": "setl_KUMGFUB19J1517",
-    "true_class": "duplicate_bank_credit",
-    "expected_disposition": "exception",
-    "injected_delta": 17372645,
-    "note": "Same UTR credited twice by the bank; second credit is unearned"
-  },
-  {
-    "settlement_id": "setl_T29GQWM10S1562",
+    "settlement_id": "setl_ESZT0FZ6UN2139",
     "true_class": "clean",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "All three sources agree"
   },
   {
-    "settlement_id": "setl_A1ZVFFQUA41600",
+    "settlement_id": "setl_5FBRB7P6J02165",
+    "true_class": "clean",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "All three sources agree"
+  },
+  {
+    "settlement_id": "setl_6GF7HPJGVB2179",
+    "true_class": "fee_tax_rounding",
+    "expected_disposition": "reconciled",
+    "injected_delta": 2,
+    "note": "Sub-rupee fee/GST rounding drift between per-line and aggregate totals"
+  },
+  {
+    "settlement_id": "setl_UYNGF473232223",
     "true_class": "fee_tax_rounding",
     "expected_disposition": "reconciled",
     "injected_delta": -1,
     "note": "Sub-rupee fee/GST rounding drift between per-line and aggregate totals"
   },
   {
-    "settlement_id": "setl_GEACC2CYRA1641",
-    "true_class": "true_mismatch",
-    "expected_disposition": "exception",
-    "injected_delta": -368501,
-    "note": "Material unexplained difference between payout and bank credit"
-  },
-  {
-    "settlement_id": "setl_PHBSRTE01L1658",
+    "settlement_id": "setl_6G0Z3Y11522267",
     "true_class": "clean",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "All three sources agree"
   },
   {
-    "settlement_id": "setl_ZD0R6REHDT1693",
-    "true_class": "clean",
+    "settlement_id": "setl_AVXBMGVPXQ2311",
+    "true_class": "fee_tax_rounding",
     "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "All three sources agree"
+    "injected_delta": 2,
+    "note": "Sub-rupee fee/GST rounding drift between per-line and aggregate totals"
   },
   {
-    "settlement_id": "setl_TGRLGA4JDM1716",
+    "settlement_id": "setl_1QFYMKHL6D2352",
     "true_class": "bank_charge_adjustment",
     "expected_disposition": "reconciled",
     "injected_delta": -1770,
-    "note": "Bank levied a transfer charge of 1770 paise not present in the PSP report"
+    "note": "Bank levied a transfer charge of 1770 paise, itemised as a separate debit"
   },
   {
-    "settlement_id": "setl_WSD0VVJAC01754",
-    "true_class": "missing_utr",
-    "expected_disposition": "reconciled",
+    "settlement_id": "setl_60033MLYQQ2379",
+    "true_class": "ledger_mismatch",
+    "expected_disposition": "exception",
     "injected_delta": 0,
-    "note": "Bank reference field unusable; identity recoverable only from narration"
+    "note": "Orders order_XDRW73M0V82395 and order_RQGEKNQZ422401 misstated by 10392 paise in opposite directions; settlement total unaffected"
   },
   {
-    "settlement_id": "setl_QWA7FJUXYP1789",
-    "true_class": "missing_utr",
+    "settlement_id": "setl_JYN45SBR602405",
+    "true_class": "true_mismatch",
+    "expected_disposition": "exception",
+    "injected_delta": -22442,
+    "note": "Material unexplained difference between payout and bank credit"
+  },
+  {
+    "settlement_id": "setl_VWW523RVWV2431",
+    "true_class": "bank_charge_adjustment",
     "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "Bank reference field unusable; identity recoverable only from narration"
+    "injected_delta": -1770,
+    "note": "Bank levied a transfer charge of 1770 paise, itemised as a separate debit"
   },
   {
-    "settlement_id": "setl_89E87P64Y81830",
+    "settlement_id": "setl_S89192X0KL2449",
     "true_class": "clean",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "All three sources agree"
   },
   {
-    "settlement_id": "setl_2B4W0SUT131865",
+    "settlement_id": "setl_LXPG3TM9R92469",
+    "true_class": "duplicate_bank_credit",
+    "expected_disposition": "exception",
+    "injected_delta": 6404402,
+    "note": "Same UTR credited twice by the bank; second credit is unearned"
+  },
+  {
+    "settlement_id": "setl_K15A5TMHXR2505",
     "true_class": "fee_tax_rounding",
     "expected_disposition": "reconciled",
     "injected_delta": -1,
     "note": "Sub-rupee fee/GST rounding drift between per-line and aggregate totals"
   },
   {
-    "settlement_id": "setl_YLYSMB1TUF1882",
+    "settlement_id": "setl_LAF7ZVZTE12537",
+    "true_class": "consolidated_payout",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "Paid in one bank transfer jointly with setl_5R1WACNKBC2559"
+  },
+  {
+    "settlement_id": "setl_5R1WACNKBC2559",
+    "true_class": "consolidated_payout",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "Paid in one bank transfer jointly with setl_LAF7ZVZTE12537"
+  },
+  {
+    "settlement_id": "setl_P715R986JV2591",
     "true_class": "clean",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "All three sources agree"
   },
   {
-    "settlement_id": "setl_7G3LDULZHU1923",
+    "settlement_id": "setl_2PUECQSFTF2605",
     "true_class": "clean",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "All three sources agree"
   },
   {
-    "settlement_id": "setl_DNLGEYQXYA1946",
-    "true_class": "missing_utr",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "Bank reference field unusable; identity recoverable only from narration"
+    "settlement_id": "setl_YD0L696DLY2643",
+    "true_class": "true_mismatch",
+    "expected_disposition": "exception",
+    "injected_delta": 111047,
+    "note": "Material unexplained difference between payout and bank credit"
   },
   {
-    "settlement_id": "setl_C3PSUMCT3E1966",
-    "true_class": "clean",
+    "settlement_id": "setl_K9QANTKTN52657",
+    "true_class": "consolidated_payout",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
-    "note": "All three sources agree"
+    "note": "Paid in one bank transfer jointly with setl_3XCRYWZY4C2688"
   },
   {
-    "settlement_id": "setl_ZTBR1T8KHY2004",
+    "settlement_id": "setl_3XCRYWZY4C2688",
+    "true_class": "consolidated_payout",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "Paid in one bank transfer jointly with setl_K9QANTKTN52657"
+  },
+  {
+    "settlement_id": "setl_KD1NKL9BFL2702",
     "true_class": "refund_netted_later",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
-    "note": "Refund for order order_CQS1SA9QCQ1351 raised 2026-08-02 but netted into this payout"
+    "note": "Refund for order order_D42Q5QGBBH1676 raised 2026-08-06 but netted into this payout"
   },
   {
-    "settlement_id": "setl_CHLDRBKZJB2043",
-    "true_class": "clean",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "All three sources agree"
-  },
-  {
-    "settlement_id": "setl_KJ7455PPE22066",
-    "true_class": "clean",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "All three sources agree"
-  },
-  {
-    "settlement_id": "setl_VWC5PY07V82092",
-    "true_class": "fee_tax_rounding",
-    "expected_disposition": "reconciled",
-    "injected_delta": 1,
-    "note": "Sub-rupee fee/GST rounding drift between per-line and aggregate totals"
-  },
-  {
-    "settlement_id": "setl_XYLM740SFV2136",
-    "true_class": "fee_tax_rounding",
-    "expected_disposition": "reconciled",
-    "injected_delta": 1,
-    "note": "Sub-rupee fee/GST rounding drift between per-line and aggregate totals"
-  },
-  {
-    "settlement_id": "setl_PCESFG1AUF2174",
-    "true_class": "clean",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "All three sources agree"
-  },
-  {
-    "settlement_id": "setl_JCMF8QB0QY2200",
-    "true_class": "fee_tax_rounding",
-    "expected_disposition": "reconciled",
-    "injected_delta": 1,
-    "note": "Sub-rupee fee/GST rounding drift between per-line and aggregate totals"
-  },
-  {
-    "settlement_id": "setl_UZHBV2JWA22235",
-    "true_class": "bank_charge_adjustment",
-    "expected_disposition": "reconciled",
-    "injected_delta": -2360,
-    "note": "Bank levied a transfer charge of 2360 paise not present in the PSP report"
-  },
-  {
-    "settlement_id": "setl_0NADA4FKED2264",
-    "true_class": "consolidated_payout",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "Paid in one bank transfer jointly with setl_B8FJJ39EYV2283"
-  },
-  {
-    "settlement_id": "setl_B8FJJ39EYV2283",
-    "true_class": "consolidated_payout",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "Paid in one bank transfer jointly with setl_0NADA4FKED2264"
-  },
-  {
-    "settlement_id": "setl_CFQWGF6VYY2315",
-    "true_class": "true_mismatch",
+    "settlement_id": "setl_X3M5XEPS0R2735",
+    "true_class": "ledger_mismatch",
     "expected_disposition": "exception",
-    "injected_delta": 369298,
-    "note": "Material unexplained difference between payout and bank credit"
-  },
-  {
-    "settlement_id": "setl_W4P536HBYJ2329",
-    "true_class": "split_refund",
-    "expected_disposition": "reconciled",
     "injected_delta": 0,
-    "note": "Order order_QETZCEP2V70741 refunded in two parts across consecutive settlements"
+    "note": "Orders order_X9Y6PDJ5QJ2751 and order_U4CXKCRFQL2745 misstated by 77053 paise in opposite directions; settlement total unaffected"
   },
   {
-    "settlement_id": "setl_1QSYSGPSWQ2366",
-    "true_class": "clean",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "All three sources agree"
-  },
-  {
-    "settlement_id": "setl_KUA03M8NT22380",
-    "true_class": "timing_cut",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "Payout settled 2026-08-20 but credited 2026-08-22, crossing the period cut-off"
-  },
-  {
-    "settlement_id": "setl_9H05YMPPGQ2424",
-    "true_class": "clean",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "All three sources agree"
-  },
-  {
-    "settlement_id": "setl_XMCX8BK91B2438",
-    "true_class": "bank_charge_adjustment",
-    "expected_disposition": "reconciled",
-    "injected_delta": -2360,
-    "note": "Bank levied a transfer charge of 2360 paise not present in the PSP report"
-  },
-  {
-    "settlement_id": "setl_G1XZ5PWKRK2476",
-    "true_class": "clean",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "All three sources agree"
-  },
-  {
-    "settlement_id": "setl_SQWPR40SH52514",
-    "true_class": "clean",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "All three sources agree"
-  },
-  {
-    "settlement_id": "setl_S7X2AAE9TJ2558",
-    "true_class": "true_mismatch",
-    "expected_disposition": "exception",
-    "injected_delta": -12190,
-    "note": "Material unexplained difference between payout and bank credit"
-  },
-  {
-    "settlement_id": "setl_GMZFZ9CSG92599",
-    "true_class": "bank_charge_adjustment",
-    "expected_disposition": "reconciled",
-    "injected_delta": -1770,
-    "note": "Bank levied a transfer charge of 1770 paise not present in the PSP report"
-  },
-  {
-    "settlement_id": "setl_11KZWJDXBM2631",
+    "settlement_id": "setl_NW15BJ47L82761",
     "true_class": "refund_netted_later",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
-    "note": "Refund for order order_5NSUPCXQ781796 raised 2026-08-22 but netted into this payout"
+    "note": "Refund for order order_NF6WYXL87T2453 raised 2026-08-09 but netted into this payout"
   },
   {
-    "settlement_id": "setl_P15AP93KY12649",
-    "true_class": "true_mismatch",
-    "expected_disposition": "exception",
-    "injected_delta": 402255,
-    "note": "Material unexplained difference between payout and bank credit"
-  },
-  {
-    "settlement_id": "setl_R51RDAA6R72678",
-    "true_class": "fee_tax_rounding",
-    "expected_disposition": "reconciled",
-    "injected_delta": 1,
-    "note": "Sub-rupee fee/GST rounding drift between per-line and aggregate totals"
-  },
-  {
-    "settlement_id": "setl_QMCFAM6Z6T2719",
+    "settlement_id": "setl_Y8VA8GHTSF2794",
     "true_class": "consolidated_payout",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
-    "note": "Paid in one bank transfer jointly with setl_M8LU4CXKCR2747"
+    "note": "Paid in one bank transfer jointly with setl_4PTV5UWMQW2807"
   },
   {
-    "settlement_id": "setl_M8LU4CXKCR2747",
+    "settlement_id": "setl_4PTV5UWMQW2807",
     "true_class": "consolidated_payout",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
-    "note": "Paid in one bank transfer jointly with setl_QMCFAM6Z6T2719"
+    "note": "Paid in one bank transfer jointly with setl_Y8VA8GHTSF2794"
   },
   {
-    "settlement_id": "setl_P3M532FM7R2776",
+    "settlement_id": "setl_W4J361ZTF82824",
     "true_class": "duplicate_bank_credit",
     "expected_disposition": "exception",
-    "injected_delta": 18627061,
+    "injected_delta": 21645026,
     "note": "Same UTR credited twice by the bank; second credit is unearned"
   },
   {
-    "settlement_id": "setl_Y8VA8GHTSF2797",
+    "settlement_id": "setl_AVDP61S4T52860",
     "true_class": "timing_cut",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "Payout settled 2026-09-01 but credited 2026-09-04, crossing the period cut-off"
   },
   {
-    "settlement_id": "setl_YKNP6L6Y172814",
+    "settlement_id": "setl_QYC7SKTFVK2880",
     "true_class": "duplicate_bank_credit",
     "expected_disposition": "exception",
-    "injected_delta": 21580146,
+    "injected_delta": 4884886,
     "note": "Same UTR credited twice by the bank; second credit is unearned"
   },
   {
-    "settlement_id": "setl_JKDM3M1QDP2829",
+    "settlement_id": "setl_WSC4AU4PHV2910",
     "true_class": "clean",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "All three sources agree"
   },
   {
-    "settlement_id": "setl_FN4V44F98R2858",
+    "settlement_id": "setl_PXBYM2CM5B2948",
     "true_class": "missing_utr",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "Bank reference field unusable; identity recoverable only from narration"
   },
   {
-    "settlement_id": "setl_C7SKTFVKBU2884",
-    "true_class": "bank_charge_adjustment",
-    "expected_disposition": "reconciled",
-    "injected_delta": -5900,
-    "note": "Bank levied a transfer charge of 5900 paise not present in the PSP report"
-  },
-  {
-    "settlement_id": "setl_QGXV9AVUMN2928",
-    "true_class": "missing_utr",
+    "settlement_id": "setl_0VHKK7K61Z2977",
+    "true_class": "consolidated_payout",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
-    "note": "Bank reference field unusable; identity recoverable only from narration"
+    "note": "Paid in one bank transfer jointly with setl_2QL5CZ2GS32999"
   },
   {
-    "settlement_id": "setl_GCK2Z9Q43P2945",
+    "settlement_id": "setl_2QL5CZ2GS32999",
+    "true_class": "consolidated_payout",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "Paid in one bank transfer jointly with setl_0VHKK7K61Z2977"
+  },
+  {
+    "settlement_id": "setl_XHBKCVEEWV3019",
+    "true_class": "timing_cut",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "Payout settled 2026-09-06 but credited 2026-09-07, crossing the period cut-off"
+  },
+  {
+    "settlement_id": "setl_QRXXM3LDJT3042",
     "true_class": "chargeback_deduction",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
-    "note": "Chargeback on order_53Q8J7UCPP2912 plus Rs 1,500 handling fee deducted from payout"
+    "note": "Chargeback on order_2FQH5HK7U80067 plus Rs 1,500 handling fee deducted from payout"
   },
   {
-    "settlement_id": "setl_V25SG33JNX2978",
+    "settlement_id": "setl_5DYA6A76ZA3081",
     "true_class": "clean",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "All three sources agree"
   },
   {
-    "settlement_id": "setl_HU4RKCURFJ3013",
+    "settlement_id": "setl_7EHMU1G4Z73110",
     "true_class": "clean",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "All three sources agree"
   },
   {
-    "settlement_id": "setl_0U7B9SVC0Y3030",
+    "settlement_id": "setl_NH1DPJZDQV3136",
     "true_class": "consolidated_payout",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
-    "note": "Paid in one bank transfer jointly with setl_RUQT00DXS63061"
+    "note": "Paid in one bank transfer jointly with setl_M83XGHUJCV3158"
   },
   {
-    "settlement_id": "setl_RUQT00DXS63061",
+    "settlement_id": "setl_M83XGHUJCV3158",
     "true_class": "consolidated_payout",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
-    "note": "Paid in one bank transfer jointly with setl_0U7B9SVC0Y3030"
+    "note": "Paid in one bank transfer jointly with setl_NH1DPJZDQV3136"
   },
   {
-    "settlement_id": "setl_RUMSAJKS1M3075",
+    "settlement_id": "setl_HWBA5HPJAU3178",
     "true_class": "true_mismatch",
     "expected_disposition": "exception",
-    "injected_delta": 472895,
+    "injected_delta": -153047,
     "note": "Material unexplained difference between payout and bank credit"
   },
   {
-    "settlement_id": "setl_NMPHJ9F4E93092",
+    "settlement_id": "setl_TM5DJEYDGP3207",
     "true_class": "clean",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "All three sources agree"
   },
   {
-    "settlement_id": "setl_GR1PDCZJME3127",
+    "settlement_id": "setl_LYB9WXMX3L3230",
     "true_class": "refund_netted_later",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
-    "note": "Refund for order order_TZGBU0Q08G0445 raised 2026-09-01 but netted into this payout"
+    "note": "Refund for order order_T1BL8LV9NJ1050 raised 2026-09-06 but netted into this payout"
   },
   {
-    "settlement_id": "setl_5XALTHQBD43160",
+    "settlement_id": "setl_BVVFR9HDHG3263",
     "true_class": "missing_utr",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "Bank reference field unusable; identity recoverable only from narration"
   },
   {
-    "settlement_id": "setl_979J87K5ZV3189",
+    "settlement_id": "setl_UJ0LJ0VUG93298",
     "true_class": "clean",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "All three sources agree"
   },
   {
-    "settlement_id": "setl_X32PRPYC9K3203",
-    "true_class": "chargeback_deduction",
+    "settlement_id": "setl_AH70PGF83R3339",
+    "true_class": "missing_utr",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
-    "note": "Chargeback on order_5ZP5J2DRKG1320 plus Rs 1,500 handling fee deducted from payout"
+    "note": "Bank reference field unusable; identity recoverable only from narration"
   },
   {
-    "settlement_id": "setl_00KPKW4L7R3236",
-    "true_class": "consolidated_payout",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "Paid in one bank transfer jointly with setl_ZGFLENSB3N3264"
-  },
-  {
-    "settlement_id": "setl_ZGFLENSB3N3264",
-    "true_class": "consolidated_payout",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "Paid in one bank transfer jointly with setl_00KPKW4L7R3236"
-  },
-  {
-    "settlement_id": "setl_LDG23NRTDH3278",
-    "true_class": "timing_cut",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "Payout settled 2026-09-18 but credited 2026-09-20, crossing the period cut-off"
-  },
-  {
-    "settlement_id": "setl_K2W6WQXEN63310",
-    "true_class": "clean",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "All three sources agree"
-  },
-  {
-    "settlement_id": "setl_5HWZ22F22V3336",
-    "true_class": "true_mismatch",
+    "settlement_id": "setl_Z26A5GAY1W3362",
+    "true_class": "ledger_mismatch",
     "expected_disposition": "exception",
-    "injected_delta": -10503,
-    "note": "Material unexplained difference between payout and bank credit"
-  },
-  {
-    "settlement_id": "setl_6CWS14NRE13368",
-    "true_class": "clean",
-    "expected_disposition": "reconciled",
     "injected_delta": 0,
-    "note": "All three sources agree"
+    "note": "Orders order_N2RLP4AM003375 and order_QCTGPG9W073369 misstated by 65815 paise in opposite directions; settlement total unaffected"
   },
   {
-    "settlement_id": "setl_MP6BPYT64M3397",
-    "true_class": "clean",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "All three sources agree"
-  },
-  {
-    "settlement_id": "setl_BFFS7V5XT73438",
-    "true_class": "clean",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "All three sources agree"
-  },
-  {
-    "settlement_id": "setl_UBXCHDX0QX3479",
-    "true_class": "clean",
-    "expected_disposition": "reconciled",
-    "injected_delta": 0,
-    "note": "All three sources agree"
-  },
-  {
-    "settlement_id": "setl_H9335D337S3496",
+    "settlement_id": "setl_2MP6BPYT643391",
     "true_class": "duplicate_bank_credit",
     "expected_disposition": "exception",
-    "injected_delta": 17346945,
+    "injected_delta": 2818165,
     "note": "Same UTR credited twice by the bank; second credit is unearned"
   },
   {
-    "settlement_id": "setl_X6WDPEAV4F3517",
+    "settlement_id": "setl_YDMTKP9NYT3409",
     "true_class": "clean",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "All three sources agree"
   },
   {
-    "settlement_id": "setl_QZZJW7B3NA3534",
+    "settlement_id": "setl_AN39P8KYJU3426",
+    "true_class": "true_mismatch",
+    "expected_disposition": "exception",
+    "injected_delta": -419382,
+    "note": "Material unexplained difference between payout and bank credit"
+  },
+  {
+    "settlement_id": "setl_QBSDLY0DCU3449",
     "true_class": "clean",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
     "note": "All three sources agree"
   },
   {
-    "settlement_id": "setl_53RD65Q8R33557",
+    "settlement_id": "setl_QNUKJWPQJJ3493",
+    "true_class": "clean",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "All three sources agree"
+  },
+  {
+    "settlement_id": "setl_B3NAKKMQRY3528",
+    "true_class": "clean",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "All three sources agree"
+  },
+  {
+    "settlement_id": "setl_39H34LN13X3563",
+    "true_class": "clean",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "All three sources agree"
+  },
+  {
+    "settlement_id": "setl_E1HPG64AXR3598",
+    "true_class": "split_refund",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "Order order_ACNVXJKDM32825 refunded in two parts across consecutive settlements"
+  },
+  {
+    "settlement_id": "setl_RGA7C63W403644",
+    "true_class": "clean",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "All three sources agree"
+  },
+  {
+    "settlement_id": "setl_W3W4F4SUMC3682",
+    "true_class": "clean",
+    "expected_disposition": "reconciled",
+    "injected_delta": 0,
+    "note": "All three sources agree"
+  },
+  {
+    "settlement_id": "setl_L876S70FDU3726",
     "true_class": "timing_cut",
     "expected_disposition": "reconciled",
     "injected_delta": 0,
-    "note": "Payout settled 2026-09-28 but credited 2026-09-30, crossing the period cut-off"
+    "note": "Payout settled 2026-09-28 but credited 2026-09-29, crossing the period cut-off"
   }
 ]
