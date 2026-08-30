@@ -28,7 +28,7 @@ from recon.report import load_truth, score             # noqa: E402
 def main_run(tmp_path_factory):
     d = tmp_path_factory.mktemp("main")
     write_dataset(d, seed=42, n_settlements=120)
-    findings, m, units, timing = run(d)
+    findings, m, units, timing, _a = run(d)
     return findings, score(findings, load_truth(d)), d
 
 
@@ -36,7 +36,7 @@ def main_run(tmp_path_factory):
 def holdout_run(tmp_path_factory):
     d = tmp_path_factory.mktemp("holdout")
     write_holdout(d, seed=1337)
-    findings, m, units, timing = run(d)
+    findings, m, units, timing, _a = run(d)
     return findings, score(findings, load_truth(d)), d
 
 
@@ -60,7 +60,7 @@ def test_no_false_clears_on_adversarial_holdout(holdout_run):
 @pytest.mark.parametrize("seed", [1337, 2024, 90210, 55555])
 def test_holdout_safety_generalises_across_seeds(tmp_path, seed):
     write_holdout(tmp_path, seed=seed)
-    findings, _, _, _ = run(tmp_path)
+    findings, _, _, _, _ = run(tmp_path)
     metrics = score(findings, load_truth(tmp_path))
     assert metrics["false_clear_count"] == 0
 

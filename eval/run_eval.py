@@ -33,7 +33,7 @@ HOLDOUT_SEEDS = [1337, 2024, 90210, 55555]
 
 
 def evaluate(datadir: Path):
-    findings, m, units, timing = run(datadir)
+    findings, m, units, timing, _agent = run(datadir)
     metrics = score(findings, load_truth(datadir))
     return metrics, timing, findings
 

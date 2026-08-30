@@ -149,3 +149,46 @@ So the narration resolver has almost no matching work to do. That is a real
 finding about where the model does and does not belong, and the honest response
 is to keep the model out of the matching path rather than route work through it
 to justify the architecture.
+
+---
+
+## Day 3
+
+### The agent layer is built but unmeasured, and I am not going to estimate it
+
+The narration resolver and the exception-note writer are implemented, guarded,
+and unit-tested offline (`tests/test_guard.py`, 13 tests, no API key needed —
+the safety logic is pure functions precisely so it can be tested that way).
+
+But there is no `ANTHROPIC_API_KEY` and no `ant` CLI in the environment I built
+this in, so I have never run a real call. I have no token counts, no latency, no
+cost per 100 records.
+
+The tempting move is to estimate: token-count the prompts, multiply by the
+published rate, and put a plausible number in the README. I am not doing that,
+because a estimated cost figure presented next to measured accuracy figures
+reads as measured, and the entire point of this project is that the numbers in
+it are checkable. `eval/metrics.md` says "not measured" and gives the exact
+command that would measure it.
+
+This is also why the agent layer is off by default and why `--llm` **fails
+loudly** with exit code 3 rather than silently degrading. A run that was meant
+to use the model must never quietly pretend it did.
+
+### The guard is the part I would defend in an interview
+
+`verify_narration()` extracts every rupee figure from model-generated prose and
+rejects the entire output if even one was not computed by the engine. Not
+"flags for review" — rejects, and falls back to the deterministic text.
+
+The reasoning: a plausible wrong number in a finance note is worse than no note
+at all. Nobody acts on a missing explanation. People act on a number, and the
+action here is quoting it to a bank. So the failure mode of a slightly-wrong
+narration is a finance analyst confidently telling their bank the wrong figure.
+
+`verify_match()` is the same idea for identity: the model may propose which
+payout a bank row belongs to, and the proposal is then re-run through the exact
+amount and date-window test the deterministic matcher uses. An accepted proposal
+is one the engine could defend without ever mentioning that a model was
+involved. `test_match_rejected_when_amount_is_off_by_one_paisa` pins that —
+exact means exact.
