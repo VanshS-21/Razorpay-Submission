@@ -7,3 +7,4 @@ out/
 .pytest_cache/
 *.egg-info/
 .scratch/
+.pytest-tmp/
