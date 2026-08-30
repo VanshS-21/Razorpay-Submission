@@ -6,12 +6,22 @@ measure internal consistency, not capability.
 
 This module exists to break that. Every settlement here carries TWO defects at
 once. The engine classifies with a single label and an ordered rule chain, so
-compounds are outside its design by construction -- nothing here was reverse
-engineered from the classifier, and the failures it produces are real.
+compounds are outside its design by construction, and the failures it produces
+are real -- it found two false-clear bugs and two false-escalate bugs on first
+contact, listed in docs/FAILURE_LOG.md.
 
-Scored on DISPOSITION only (reconciled vs exception), never on reason code: with
-two defects present there is no single correct reason code, and grading against
-one would be meaningless in either direction.
+Two things to be honest about, both raised by an external audit:
+
+1. The DISPOSITIONS here were derived from the defects, but the PRIMARY reason
+   codes are the ones the classifier's rule order actually emits. Reason-code
+   accuracy on this set is therefore not an independent measurement, and no
+   headline number is taken from it. Every settlement records the full set of
+   defensible codes in `also_acceptable`, and scoring accepts any of them --
+   with two defects present, naming either is correct and grading against one
+   is meaningless in both directions.
+
+2. This set has been fixed against, which makes it training data. It cannot be
+   re-used as a clean holdout, and the README says so where the numbers appear.
 """
 
 from __future__ import annotations
@@ -62,13 +72,14 @@ class AdversarialGenerator(Generator):
         self.lines.extend(ls)
         return ls
 
-    def _truth(self, sid, primary, disp, components, note):
+    def _truth(self, sid, primary, disp, components, note, delta=0):
         self.truth.append(GroundTruth(
             settlement_id=sid,
             true_class=primary,
             expected_disposition=disp,
-            injected_delta=0,
+            injected_delta=delta,
             note=f"COMPOUND [{' + '.join(components)}]: {note}",
+            also_acceptable=tuple(components),
         ))
 
     def _charge_row(self, utr, d, amount):
@@ -81,11 +92,22 @@ class AdversarialGenerator(Generator):
     # -- compounds ---------------------------------------------------------
 
     def _missing_utr_plus_bank_charge(self, d: date):
-        """Unusable reference AND an itemised transfer charge.
+        """Unusable reference AND an unreferenced transfer charge.
 
-        Amount-and-date fallback matching looks for the EXACT net. The charge
-        moves the credit off that figure, so the fallback finds nothing and the
-        payout looks as though it was never paid at all.
+        This docstring used to claim the charge moved the credit off the exact
+        net so the fallback found nothing. It did not: the credit carries the
+        exact net and the charge is a separate debit, which is how a bank
+        actually posts it, so the fallback matched immediately and this was not
+        a compound at all -- an audit caught it as one family in five that did
+        not do what it said.
+
+        The credit must equal the net, or the write-off arithmetic downstream
+        stops being true. What makes it a genuine compound is the charge row:
+        its reference is unusable too, so nothing joins it to the payout it was
+        levied on. Left orphan it is invisible, the settlement ties exactly and
+        clears CLEAN -- money out of the account, explained by nothing. Both
+        mechanisms have to work: the fallback to find the credit, and charge
+        attribution to find the fee.
         """
         sid, utr = self._id("setl"), self._utr()
         ls = self._payments(sid, utr, d)
@@ -178,7 +200,8 @@ class AdversarialGenerator(Generator):
             ))
         self._truth(sid, AnomalyClass.DUPLICATE_BANK_CREDIT, Disposition.EXCEPTION,
                     ["duplicate_bank_credit", "ledger_mismatch"],
-                    "unearned duplicate credit over a misstated line")
+                    "unearned duplicate credit over a misstated line",
+                    delta=net)
 
     def _chargeback_plus_shortfall(self, d: date):
         """A genuine shortfall in a settlement that also carries a chargeback.
@@ -203,7 +226,8 @@ class AdversarialGenerator(Generator):
         ))
         self._truth(sid, AnomalyClass.TRUE_MISMATCH, Disposition.EXCEPTION,
                     ["chargeback_deduction", "true_mismatch"],
-                    "chargeback is real, but does not account for the shortfall")
+                    "chargeback is real, but does not account for the shortfall",
+                    delta=-gap)
 
 
 def write_holdout(outdir: Path, seed: int = 1337, per_case: int = 4):

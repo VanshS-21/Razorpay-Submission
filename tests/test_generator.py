@@ -17,6 +17,9 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from recon.generate import Generator, allocate, fee_for, DEFAULT_WEIGHTS  # noqa: E402
+from recon.engine.classify import classify  # noqa: E402
+from recon.engine.matcher import match  # noqa: E402
+from recon.ingest import build_units  # noqa: E402
 from recon.models import (  # noqa: E402
     AnomalyClass,
     Disposition,
@@ -34,7 +37,7 @@ def dataset():
     return lines, bank, orders, truth
 
 
-def _by_settlement(lines, bank, truth):
+def _by_settlement(lines, bank=(), truth=()):
     l = defaultdict(list)
     for x in lines:
         l[x.settlement_id].append(x)
@@ -142,18 +145,88 @@ def test_rounding_drift_is_sub_rupee(dataset):
     assert all(0 < abs(d) <= 5 for d in drifts), drifts
 
 
-def test_true_mismatch_is_materially_larger_than_tolerance(dataset):
-    """A true mismatch must never be small enough to hide inside the tolerance.
+@pytest.mark.parametrize("seed", [13, 28, 31, 33, 100])
+def test_engine_holds_where_the_magnitude_bands_overlap(seed):
+    """The bands are ALLOWED to overlap, and the engine must not care.
 
-    If these two classes overlapped in magnitude, no threshold could separate
-    them and the false-clear rate would be a property of the data rather than
-    of the engine.
+    This test replaced its own opposite. The original asserted that true
+    mismatches are always >= Rs 100 and bank charges always <= Rs 59, on the
+    reasoning that overlap would make the false-clear rate a property of the
+    data. That is true -- which is exactly why the separation must not be
+    relied on, and why asserting it locked in the flattery it was warning
+    about. The README claimed the bands had been overlapped as a hardening
+    step; this test forbade it; the shipped seed had a 3.8x gap between them.
+    Three artifacts, three different stories.
+
+    So: these seeds are ones where the smallest injected true mismatch is
+    SMALLER than the largest injected bank charge. No size threshold can
+    separate them there. The engine must still escalate every true mismatch,
+    because it decides on evidence -- an itemised charge row on the statement --
+    and not on magnitude.
     """
-    _, _, _, truth = dataset
-    gaps = [abs(t.injected_delta) for t in truth
-            if t.true_class is AnomalyClass.TRUE_MISMATCH]
-    assert gaps
-    assert min(gaps) >= 10_000, "true mismatches must be >= Rs 100"
+    lines, bank, orders, truth = Generator(seed=seed, n_settlements=120).run()
+    by_t = {t.settlement_id: t for t in truth}
+    tm = [abs(t.injected_delta) for t in truth
+          if t.true_class is AnomalyClass.TRUE_MISMATCH]
+    bc = [abs(t.injected_delta) for t in truth
+          if t.true_class is AnomalyClass.BANK_CHARGE_ADJUSTMENT]
+    assert tm and bc
+    assert min(tm) <= max(bc), (
+        f"seed {seed} no longer overlaps (min mismatch {min(tm)}, "
+        f"max charge {max(bc)}); pick another seed rather than deleting the test")
+
+    units = build_units(lines)
+    m = match(units, bank)
+    order_index = {o.order_id: o for o in orders}
+    for sid, u in units.items():
+        u.bank_credits = m.assigned.get(sid) or []
+    for sid, u in units.items():
+        gt = by_t.get(sid)
+        if gt is None or gt.true_class is not AnomalyClass.TRUE_MISMATCH:
+            continue
+        f = classify(u, m, order_index)
+        assert f.disposition is Disposition.EXCEPTION, (
+            f"seed {seed}: {sid} is a true mismatch of "
+            f"{abs(gt.injected_delta)} paise, inside the bank-charge band, and "
+            f"was cleared")
+
+
+def test_a_labelled_defect_is_actually_present(dataset):
+    """A settlement labelled X must actually contain X.
+
+    The key is this project's single point of failure: the generator writes
+    both the data and the answers, so a bug here makes every accuracy number
+    fiction while every other test still passes. The delta test cannot see
+    this class of bug -- a chargeback that was never injected has a delta of
+    zero, and zero is exactly what the key records.
+
+    It was not hypothetical. Three defect classes act on an order from an
+    EARLIER settlement, and when one of them landed first in the schedule the
+    injection was skipped while the label was written anyway. It fired on 5 of
+    40 seeds. Nothing caught it, because nothing asserted this.
+    """
+    lines, _, _, truth = dataset
+    by_l, _, by_t = _by_settlement(lines, truth=truth)
+
+    markers = {
+        AnomalyClass.CHARGEBACK_DEDUCTION: (
+            lambda ls: any(x.type is EntityType.DISPUTE for x in ls),
+            "a dispute line"),
+        AnomalyClass.REFUND_NETTED_LATER: (
+            lambda ls: any(x.type is EntityType.REFUND for x in ls),
+            "a refund line"),
+        AnomalyClass.SPLIT_REFUND: (
+            lambda ls: any(x.type is EntityType.REFUND for x in ls),
+            "a refund line"),
+    }
+    for sid, gt in by_t.items():
+        check = markers.get(gt.true_class)
+        if not check:
+            continue
+        ok, what = check
+        assert ok(by_l[sid]), (
+            f"{sid} is labelled {gt.true_class.value} but contains no {what}. "
+            f"The key is claiming a defect that is not in the data.")
 
 
 def test_duplicate_credits_have_two_bank_rows(dataset):

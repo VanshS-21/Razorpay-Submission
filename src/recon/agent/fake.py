@@ -26,7 +26,8 @@ import json
 import re
 from dataclasses import dataclass
 
-SCENARIOS = ("honest", "hallucinating", "overreaching", "failing", "refusing")
+SCENARIOS = ("honest", "hallucinating", "overreaching", "failing",
+             "refusing", "plausible")
 
 #: A figure provably outside any allowed set this engine can produce.
 #: The generator caps a single line at 15,000,000 paise (Rs 1.5 lakh) and a
@@ -117,6 +118,13 @@ class _Messages:
                     "evidence": "the narration mentions Razorpay",
                     "confidence": 0.99}
 
+        # "plausible" exists because every other scenario is caught by
+        # arithmetic, which meant the ACCEPT path was never exercised and the
+        # invariant test could not fail. This one names the first candidate --
+        # on an ambiguous row, that candidate ties on amount and date by
+        # definition, so the guard has nothing left to reject it with. It is
+        # the shape of proposal that used to clear a payout on the model's say
+        # so. It must now change nothing at all.
         return {"settlement_id": ids[0],
                 "evidence": "merchant name and truncated reference fragment",
                 "confidence": 0.8}

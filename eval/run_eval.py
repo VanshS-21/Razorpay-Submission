@@ -19,6 +19,7 @@ import json
 import subprocess
 import sys
 from datetime import datetime, timezone
+import statistics
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -50,6 +51,16 @@ def main():
     main_dir = ROOT / "data"
     write_dataset(main_dir, seed=42, n_settlements=120)
     main_metrics, main_timing, main_findings = evaluate(main_dir)
+
+    # Nine runs, reported as a median with the range. One wall-clock reading
+    # varied by nearly 3x between identical runs here, so quoting a single one
+    # to three significant figures measures the machine, not the engine.
+    rates = []
+    for _ in range(9):
+        _, _, _, t, _ = run(main_dir)
+        rates.append(t["lines"] / t["total_s"])
+    rates.sort()
+    median_rate = statistics.median(rates)
 
     # -- holdout, across seeds -------------------------------------------
     holdout_dir = main_dir / "holdout"
@@ -97,14 +108,20 @@ def main():
     L.append(f"| Match rate | {_pct(main_metrics['match_rate'])} | "
              f"{_pct(hold_metrics['match_rate'])} |")
     L.append(f"| Reason-code accuracy | {_pct(main_metrics['classification_accuracy'])} | "
-             "not scored (see below) |")
+             f"{_pct(hold_metrics['classification_accuracy'])}, of which "
+             f"{_pct(hold_metrics['classification_accuracy_strict'])} exact primary |")
 
-    rate = main_timing["lines"] / main_timing["total_s"]
     L.append("\n## Throughput\n")
     L.append(f"{main_timing['lines']} settlement lines across "
-             f"{main_timing['settlements']} settlements in "
-             f"{main_timing['total_s']:.3f}s — **{rate:,.0f} lines/sec**, "
-             "single-threaded, no LLM calls.\n")
+             f"{main_timing['settlements']} settlements: "
+             f"**{median_rate:,.0f} lines/sec** median of {len(rates)} runs "
+             f"(range {min(rates):,.0f}-{max(rates):,.0f}), single-threaded, "
+             "no LLM calls.\n")
+    L.append("The spread across identical runs is roughly 3x, so a single "
+             "figure quoted to three significant figures would be measuring "
+             "the machine's mood rather than the engine. At this size it is "
+             "not a scalability claim either: the whole dataset fits in cache, "
+             "and pass 3 is quadratic in settlement count.\n")
     L.append(f"- load `{main_timing['load_s']:.3f}s` "
              f"- match `{main_timing['match_s']:.3f}s` "
              f"- classify `{main_timing['classify_s']:.3f}s`\n")

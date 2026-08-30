@@ -219,6 +219,11 @@ does — lies, overreaches, dies, or refuses — the set of settlements escalate
 a human does not shrink, and not one verdict moves.** The model may improve the
 prose and nothing else.
 
+> **This claim was wrong when I wrote it.** See Day 5 — the test could not fail,
+> and the invariant it was guarding did not hold. I have left the paragraph as
+> written rather than editing it, because the point of this log is what I
+> actually believed at the time.
+
 To keep this honest, a stubbed run prints a loud banner, reports its model id as
 `SCRIPTED-STUB[...]`, and suppresses the cost line entirely, because the token
 figures the stub produces are fabricated and a fabricated cost sitting where a
@@ -246,3 +251,115 @@ One line deleted, one regression test added (`test_zero_is_a_citable_figure`).
 The general lesson, which I did not expect going in: a guard needs its **accept**
 path tested as hard as its reject path. A guard that rejects everything is
 trivially safe and completely useless, and mine was quietly drifting that way.
+
+---
+
+## Day 5 — an independent audit
+
+I wrote a deliberately adversarial prompt and gave it to an agent with no
+context on the project and no stake in it: verify every claim against the code,
+treat a gap between documentation and behaviour as the most severe finding
+available, and do not be agreeable. Then I verified its findings myself before
+acting on any of them, because an agent's confident output is exactly the thing
+this project is built not to trust.
+
+It found five things that mattered. Four of them were the same mistake.
+
+### The claim I was proudest of was the one that was false
+
+*"Whatever the model does, not one verdict moves."* The audit moved two.
+
+The model was allowed to place a bank row when its proposal passed
+`verify_match`, and `verify_match` re-applied the same exact-amount-and-date
+test the matcher had already run. That sounds airtight and is circular: rows
+reach the model **because** arithmetic could not identify them, and a row is
+ambiguous precisely because several unpaid settlements tie on amount inside the
+window. Every candidate passes a test that is true of all of them by
+construction. Whichever one the model named got cleared — a verdict moving from
+exception to reconciled on a coin flip. Then `classify()` rebuilt the finding
+from scratch, so `resolved_by` said `deterministic` and confidence said 1.00.
+
+Why five scenarios and a parametrised test never caught it: `m.ambiguous` is
+empty on both shipped datasets, and every orphan proposal fails on amount. So
+`matches_accepted == 0` in all five scenarios and the accept path never
+executed. **The test passed because the code it guarded never ran.**
+
+That is the lesson I want to keep from this whole build. A test over a path
+that cannot execute is not weak evidence, it is *no* evidence, and it is worse
+than no test because it reads like proof. I had already learned the neighbouring
+lesson on Day 4 — that a guard needs its accept path tested as hard as its
+reject path — and still did not check whether the accept path was reachable.
+
+The fix is not a better guard. The model no longer places anything: it returns
+leads, attached to the exception for the human, never handed to the classifier.
+The guarantee is now structural rather than asserted. A sixth stub scenario,
+`plausible`, plus a two-identical-nets fixture, exercise the path that used to
+be unreachable.
+
+### Three artifacts, three different stories
+
+The README said I had overlapped the true-mismatch and bank-charge magnitude
+bands so no size threshold could separate them, and counted it as a hardening
+step. A comment in `arithmetic.py` said the two bands **do not** overlap and
+that "the README says so explicitly." A shipped test asserted mismatches are
+always ≥ Rs 100 — enforcing the separation the README claimed to have removed.
+The shipped data had a 3.8× gap.
+
+Every one of those was written by me, within a few hours of the others. The
+generator really can draw from Rs 20; seed 42 just did not. The rule really is
+evidence-based and correct — I confirmed it holds on seeds where the bands
+genuinely overlap. But a submission whose entire argument is "my numbers are
+honest and checkable" cannot afford a paragraph describing work that is not in
+the repository. That is the finding I would have been most embarrassed to have
+a judge make.
+
+### The generator's key was wrong again, in the same class as Day 1
+
+Three defect classes act on an order from an *earlier* settlement. When one
+landed first in the shuffled schedule there was no earlier order, so the
+injection was skipped with `if prior_orders:` — and the ground-truth record was
+written anyway. The key claimed a chargeback that was not in the data. Five
+occurrences across forty seeds.
+
+`test_delta_equals_injected_delta` cannot see this: a chargeback that was never
+injected has a delta of zero, and zero is exactly what the key records. Day 1
+established that the key is this project's single point of failure and that
+invariant tests are how you defend it. I then wrote no test asserting that a
+settlement labelled X actually contains X. That test exists now
+(`test_a_labelled_defect_is_actually_present`), and the schedule guarantees a
+history-independent class goes first.
+
+### Seven mutants, seven surviving
+
+The audit mutated constants and rules and re-ran the suite. Widening the
+rounding tolerance a hundredfold: 72 passed. Emptying the bank-charge
+vocabulary: 72 passed. Turning *"no bank credit found for this payout"* into
+`RECONCILED` — auto-clearing money the merchant never received: 72 passed.
+
+The dispositions I had pinned were pinned well. The thresholds underneath them
+were not pinned at all, and one of them is the constant behind a documented
+limitation, which makes its value a published claim. There was also no fixture
+anywhere in the suite where a payout simply never arrived, because the generator
+always credits something.
+
+All seven are killed now, each by a test that says why it exists.
+
+### What the audit could not fix
+
+An over-credit on one settlement sitting beside an unrelated unpaid payout of
+exactly the right size is arithmetically identical to a genuine consolidated
+transfer. The engine clears both. I could not find a rule that separates them,
+because in the data there is no difference — only the bank knows. So it stays
+cleared, but it is now marked `deterministic:inferred`, carries 0.90 confidence,
+and is listed under **SPOT CHECK** in every report, with the limitation stated
+in the README. Making a weakness visible is not the same as fixing it, and I
+would rather say so than quietly widen a tolerance until the symptom goes away.
+
+### Reproducing the Day 3 numbers
+
+The holdout and both fixes landed in the same commit, so there is no commit you
+can check out where the engine fails at 33.3%. To reconstruct it: revert
+`unsupported_refunds()` in `engine/classify.py` and the charge-row exclusion
+from the surplus computation in `engine/matcher.py`, then run the holdout. That
+is a fair criticism of how I committed, not of the numbers — they reproduce
+exactly.

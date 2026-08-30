@@ -265,7 +265,7 @@ _ZERO_DELTA_CLASSES = {AnomalyClass.LEDGER_MISMATCH}
 
 def render_html(metrics: dict, findings: list, timing: dict,
                 units: dict | None = None, agent: dict | None = None,
-                dataset: str = "data") -> str:
+                dataset: str = "data", match_result=None) -> str:
     fc = metrics["false_clear_count"]
     passed = fc == 0
     exceptions = sorted(
@@ -335,6 +335,53 @@ def render_html(metrics: dict, findings: list, timing: dict,
       f"{timing['orders']:,} orders read</span>")
     A("</div></section>")
 
+    # -- bank-side coverage ------------------------------------------------
+    # The statement is the second of three sources. Reporting only what
+    # fraction of PAYOUTS reconciled, and never what fraction of the STATEMENT
+    # was explained, leaves half the job unaccounted for.
+    if match_result is not None:
+        rows = list(match_result.orphan_bank)
+        A('<section class="sec"><div class="sec-head">'
+          "<h2>Bank-side coverage</h2>"
+          f'<span class="count">{len(rows)} statement rows left '
+          f"unexplained</span></div>")
+        A('<div class="rows">')
+        for k, sub_, v in [
+            ("Unmatched credits", "money in, not tied to any payout",
+             rupees(sum(r.credit for r in rows))),
+            ("Unmatched debits", "money out, not tied to any payout",
+             rupees(sum(r.debit for r in rows))),
+        ]:
+            A(f'<div class="row"><div class="row-k"><b>{k}</b>'
+              f"<small>{_e(sub_)}</small></div>"
+              f'<div class="row-v">{_e(v)}</div></div>')
+        A("</div>")
+        A('<p class="sub">Most of these are unrelated account traffic: payroll,'
+          " other payment gateways, vendor payments. The engine does not claim"
+          " to know which is which. It reports them so that nothing leaves the"
+          " account unseen.</p>")
+        A("</section>")
+
+    # -- reconciled by inference -------------------------------------------
+    inferred = [f for f in findings if f.resolved_by == "deterministic:inferred"]
+    if inferred:
+        A('<section class="sec"><div class="sec-head">'
+          "<h2>Spot check</h2>"
+          f'<span class="count">{len(inferred)} reconciled by inference, '
+          f"not by evidence</span></div>")
+        A('<p class="sub">A consolidated transfer is cleared because the nets'
+          " add up, not because the statement says so \u2014 the bank quoted one"
+          " UTR and the rest is inferred. Almost always right, and listed here"
+          " because it is the one clear in this engine that no document"
+          " corroborates.</p>")
+        A('<div class="rows">')
+        for f in inferred:
+            A('<div class="row"><div class="row-k">'
+              f"<b>{_e(f.settlement_id)}</b>"
+              f'<small>{_e(f.reason_code.value.replace("_", " "))}</small></div>'
+              f'<div class="row-v">{f.confidence:.2f}</div></div>')
+        A("</div></section>")
+
     # -- exceptions --------------------------------------------------------
     A('<section class="sec"><div class="sec-head"><h2>Exceptions</h2>'
       f'<span class="count">{len(exceptions)} settlements the engine refused '
@@ -395,8 +442,8 @@ def render_html(metrics: dict, findings: list, timing: dict,
              f'{g["rejected"]}/{g["checked"]}'),
             ("Notes accepted", "passed every figure check",
              str(agent["narrations_accepted"])),
-            ("Matches accepted", "re-verified against exact amount and date",
-             str(agent["matches_accepted"])),
+            ("Identity leads", "advisory only; never auto-cleared a payout",
+             str(agent["matches_proposed"])),
         ]:
             A(f'<div class="row"><div class="row-k"><b>{k}</b>'
               f"<small>{_e(sub)}</small></div>"
@@ -456,7 +503,8 @@ def render_html(metrics: dict, findings: list, timing: dict,
 
 def write_html(path: Path, metrics: dict, findings: list, timing: dict,
                units: dict | None = None, agent: dict | None = None,
-               dataset: str = "data"):
+               dataset: str = "data", match_result=None):
     Path(path).write_text(
-        render_html(metrics, findings, timing, units, agent, dataset),
+        render_html(metrics, findings, timing, units, agent, dataset,
+                    match_result),
         encoding="utf-8")

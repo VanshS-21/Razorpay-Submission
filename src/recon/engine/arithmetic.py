@@ -39,10 +39,16 @@ ROUNDING_TOLERANCE_PAISE = 5
 #:
 #: Failure mode: this is a THRESHOLD, not a fee schedule. A real deployment
 #: should match the exact debit against the bank's published charge grid, so
-#: that an unexpected Rs 40 debit is queried rather than absorbed. In the
-#: synthetic data the injected charges (<= Rs 59) and the injected true
-#: mismatches (>= Rs 100) do not overlap, which flatters this rule; the README
-#: says so explicitly.
+#: that an unexpected Rs 40 debit is queried rather than absorbed.
+#:
+#: This comment used to claim the injected charges and true mismatches never
+#: overlap, and that the README said so -- the README said the opposite, and a
+#: test asserted the separation the README claimed to have removed. On seed 42
+#: they do not overlap (Rs 59 vs Rs 224); on seeds 13, 28, 31, 33 and 100 they
+#: do. The rule does not rely on the gap either way: a shortfall is written off
+#: only when the statement ITEMISES a charge for it, never on size alone, and
+#: test_engine_holds_where_the_magnitude_bands_overlap runs the overlapping
+#: seeds to prove it.
 BANK_CHARGE_MAX_PAISE = 10_000
 
 #: How far after the settlement date a bank credit may land and still be
@@ -69,19 +75,6 @@ def line_drift(line: SettlementLine) -> int:
     if line.type is not EntityType.PAYMENT:
         return 0
     return line.credit - expected_credit(line)
-
-
-def settlement_net(lines: list[SettlementLine]) -> int:
-    """Sum of credits minus debits: what the bank should transfer."""
-    return sum(l.net for l in lines)
-
-
-def total_fees(lines: list[SettlementLine]) -> int:
-    return sum(l.fee + l.tax for l in lines)
-
-
-def gross_captured(lines: list[SettlementLine]) -> int:
-    return sum(l.amount for l in lines if l.type is EntityType.PAYMENT)
 
 
 def within_rounding(delta: int) -> bool:

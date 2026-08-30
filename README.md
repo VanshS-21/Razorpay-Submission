@@ -24,10 +24,22 @@ Full results, per-class breakdown, and caveats: [`eval/metrics.md`](eval/metrics
 | **False-clear rate** | **0.0%** (0/19) | **0.0%** (0/12) |
 | False-escalate rate | 0.0% | 0.0% |
 | Match rate | 84.9% | 50.0% |
-| Reason-code accuracy | 100.0% | not scored |
-| Throughput | 1,179 lines in 0.025s — **~46,000 lines/sec** | |
+| Reason-code accuracy | 100.0% | 100.0%, of which 83.3% exact primary |
+| Unexplained bank rows | 30, all reported | 0 |
+| Throughput | 1,149 lines — **tens of thousands of lines/sec**; see [`eval/metrics.md`](eval/metrics.md) | |
 
-72 tests. No API key or network required for any of them.
+125 tests. No API key or network required for any of them.
+
+Reason-code accuracy on the holdout counts either of a compound's two real
+defects as correct, because with two defects present there is no single right
+answer; the exact-primary figure sits beside it so nothing hides behind the
+generous reading.
+
+Throughput is deliberately not quoted as a single figure: nine identical runs
+here spanned 24k-51k lines/sec, so three significant figures would be measuring
+the machine's mood. `eval/metrics.md` reports the median and the range it came
+from. At 1,149 lines it is not a scalability claim in any case - the dataset
+fits in cache, and pass 3 is quadratic in settlement count.
 
 **Read the false-clear rate first.** It is the count of settlements the engine
 called reconciled that the answer key says needed a human. In a finance system
@@ -102,12 +114,25 @@ Concretely, the model is **not** allowed to:
   the same exact-amount and date-window test the deterministic matcher uses
 
 **The model proposes; arithmetic disposes.** [`src/recon/agent/guard.py`](src/recon/agent/guard.py)
-enforces this. Generated prose is scanned for every rupee figure it contains,
-and the whole output is rejected if even one was not computed by the engine — a
-plausible wrong number in a finance note is worse than no note, because it is a
-figure someone will quote to their bank. Rejections are counted and reported as
-a **guard rejection rate**, because how often the model had to be overruled is a
-fact about the system worth publishing.
+enforces this. Generated prose is scanned for every rupee figure it contains —
+`Rs`, `Rs.`, `INR`, `₹`, the HTML entity, and amounts with the unit trailing,
+case-insensitively — and the whole output is rejected if even one figure was not
+computed by the engine for that settlement. A plausible wrong number in a
+finance note is worse than no note, because it is a figure someone will quote to
+their bank. Rejections are counted and reported as a **guard rejection rate**,
+because how often the model had to be overruled is a fact about the system worth
+publishing.
+
+**What that check is not.** It verifies that every figure is *real*, not that
+the sentence around it is *true*. The allowed set for one settlement is every
+value the engine derived for it — a median of 35, up to 60 — so a note that cites
+a real figure in the wrong role, or gets a direction backwards ("credited more"
+where the bank credited less), passes. Catching that needs semantic
+verification, not a pattern, and this project does not claim to do it. The
+original pattern also matched only the single spelling `Rs 1,234.56`, and its
+tests used only that spelling, so they confirmed the implementation rather than
+the property; nine other ordinary spellings walked straight past it until an
+audit enumerated them.
 
 ### What the model actually turned out to be worth
 
@@ -137,11 +162,21 @@ Twelve defect classes, one per settlement, stratified so every class has ≥5
 instances. The engine scores 100% on all of them. That number is worth almost
 nothing, and I tried twice to break it:
 
-- **Overlapped the magnitude bands.** Injected true mismatches now range from
-  Rs 20 upward, overlapping plausible bank transfer charges, so no size
-  threshold can separate them. Still 100% — because I replaced the threshold
-  with an evidence rule (require an itemised charge row on the statement) that
-  is genuinely correct.
+- **Overlapped the magnitude bands.** The generator draws true mismatches from
+  Rs 20 upward, into the range of a plausible bank transfer charge, so no size
+  threshold can separate the two classes. Still 100% — because the threshold was
+  replaced with an evidence rule (require an itemised charge row on the
+  statement) that is genuinely correct.
+
+  *This paragraph used to overstate itself, and an external audit caught it.* On
+  seed 42 the bands happen not to overlap: the smallest injected mismatch is
+  Rs 224 and the largest charge Rs 59. Meanwhile a shipped test asserted that
+  mismatches are always ≥ Rs 100, and a comment in `arithmetic.py` said the
+  bands do not overlap and that the README said so — while the README said the
+  opposite. Three artifacts, three stories. That test has been replaced by
+  `test_engine_holds_where_the_magnitude_bands_overlap`, which runs five seeds
+  where the smallest mismatch really is *smaller* than the largest charge, and
+  asserts every one of them still escalates.
 - **Added a class only three-way reconciliation can catch.** Offsetting
   line-level errors that leave the settlement total tying to the paise. Caught
   perfectly, because I wrote the check at the same time as the defect.
@@ -213,17 +248,17 @@ exposed 12-column hairline grid, and **exactly one signal ink — red, spent
 entirely on risk**. Reconciled state carries no colour at all, so on this page
 "fine" is the absence of red, which is how an audit document should read.
 
-The false-clear rate is the one loud move: a flooded plate carrying the figure
-at display scale, before the flattering numbers. Below it, a matrix of 126
-squares — one per settlement, 19 red — then the exception index as numbered
-rows. Settlements that balance perfectly but still escalate get an explicit
-callout, because "Rs 0.00" beside "needs a human" reads as a bug until you know
-it is the entire point of holding a third source.
+The false-clear rate leads, before the flattering numbers, as a label-left
+figure-right row like every other — the point is that it is read first, not that
+it shouts. Red is spent on one thing only: money at risk. Settlements that
+balance perfectly but still escalate get an explicit callout, because "Rs 0.00"
+beside "needs a human" reads as a bug until you know it is the entire point of
+holding a third source.
 
-Single file, ~85 KB. The typeface (Archivo, OFL) is embedded as a data URI, so
-there is no CDN, no webfont request, and no external asset — it opens offline
-from a fresh clone and prints clean. Tokens are exported to
-[`docs/tokens.css`](docs/tokens.css).
+Single file, ~130 KB. IBM Plex Sans and IBM Plex Mono (SIL Open Font License
+1.1, see [`OFL.txt`](OFL.txt)) are embedded as data URIs, so there is no CDN, no
+webfont request, and no external asset — it opens offline from a fresh clone and
+prints clean. Tokens are exported to [`docs/tokens.css`](docs/tokens.css).
 
 ---
 
@@ -232,17 +267,22 @@ from a fresh clone and prints clean. Tokens are exported to
 ```bash
 python demo.py                      # everything, one command
 open out/report.html                # visual report (self-contained, offline)
-python -m pytest tests/ -q          # 72 tests
+python -m pytest tests/ -q          # 125 tests
 python eval/run_eval.py             # regenerate eval/metrics.md
 ```
 
 Individual stages:
 
 ```bash
+pip install -e .                    # required: these run as modules
 python -m recon.generate --out data --seed 42 --settlements 120
 python -m recon.cli --input data --out out
 python -m recon.adversarial --out data/holdout --seed 1337
 ```
+
+`demo.py`, `pytest` and `eval/run_eval.py` each put `src/` on the path
+themselves and need no install. The four commands above do not, and used to fail
+with `ModuleNotFoundError` on a fresh clone.
 
 The agent layer is **off by default** — the deterministic engine is the product,
 and an engine that only reconciles when a network call succeeds is not one a
@@ -268,14 +308,37 @@ python -m recon.cli --input data --llm-stub hallucinating
 
 `--llm-stub` drives the real agent code path with a scripted client that
 misbehaves on purpose — `honest`, `hallucinating`, `overreaching`, `failing`,
-`refusing`. Waiting for a real model to eventually invent a figure is not a
-test; scripting one that definitely does makes the safety property a
+`refusing`, `plausible`. Waiting for a real model to eventually invent a figure
+is not a test; scripting one that definitely does makes the safety property a
 deterministic assertion.
 
-**The invariant, asserted across all five scenarios:** whatever the model does —
-lies, overreaches, dies, or refuses — the set of settlements escalated to a
-human does not shrink, and **not one verdict moves**. The model may improve the
-prose and nothing else.
+**The invariant:** whatever the model does — lies, overreaches, dies, refuses,
+or answers entirely plausibly — the set of settlements escalated to a human does
+not shrink, and **not one verdict moves**. The model may improve the prose and
+nothing else.
+
+That claim used to be weaker than it sounded, and an external audit is why it is
+not any more. The model *was* allowed to place a bank row when its proposal
+passed the guard, and the guard re-applied the same exact-amount-and-date test
+the matcher had already run. On an ambiguous row that test cannot discriminate —
+a row is ambiguous precisely *because* several unpaid settlements tie on amount
+inside the window — so every candidate passed it, and whichever one the model
+named got cleared. A verdict moved from exception to reconciled on a coin flip,
+and because `classify()` rebuilt the finding from scratch afterwards, the output
+attributed the result to the deterministic engine.
+
+The five-scenario test did not catch it: the ambiguous set is empty on both
+shipped datasets and every orphan proposal failed on amount, so the accept path
+never executed in any scenario. An invariant guarded only by a path that never
+runs is a coincidence.
+
+The model now returns **leads, never placements**. A proposal is attached to the
+exception it concerns as a line the human can act on, and is never handed to the
+classifier — so a verdict cannot move because no code exists that could move
+one, rather than because a test asserted it on data where the question never
+arose. A sixth scenario, `plausible`, exercises the case directly, and
+`test_an_ambiguous_row_is_never_resolved_by_the_model` builds the
+two-identical-nets input the shipped data never produces.
 
 ```
 guard rejections      49/49 (100.0%)
@@ -302,6 +365,8 @@ src/recon/
   generate.py          synthetic three-source data + ground-truth answer key
   adversarial.py       compound-defect holdout (the only honest measurement)
   ingest.py            CSV -> typed records, converted to paise at the boundary
+                       (decimal rupees or integer paise; a cell that is neither
+                       is refused by file, row and column, never read as zero)
   engine/
     arithmetic.py      tolerances, each with its justification AND failure mode
     matcher.py         UTR join -> amount+date -> bounded exact subset-sum
@@ -326,6 +391,25 @@ docs/FAILURE_LOG.md    what broke, kept live rather than reconstructed
   more than 3 paise — but it is a real hole and it is stated rather than hidden.
 - **Single-label classification.** A settlement with two defects gets one reason
   code. Disposition stays correct; the explanation is partial.
+- **A consolidated transfer is cleared on arithmetic alone.** Nothing in the
+  statement names the other payouts in the group: the bank quotes one UTR and
+  the rest is inferred from the fact that their nets add up. That inference is
+  the reason a subset-sum solver has to exist, and it is almost always right —
+  but *"these payouts sum to this credit"* and *"this credit paid these
+  payouts"* are different statements. An over-credit on one settlement sitting
+  beside an unrelated unpaid payout of exactly the right size satisfies the
+  first and not the second, and the engine will clear both. It is
+  indistinguishable from a genuine consolidation *in the data*, so no rule fixes
+  it. What changed after the audit found it: the solver now refuses any target
+  with more than one valid subset, checks the window against every credit row
+  rather than one anchor, and every such clear is marked `deterministic:inferred`
+  at 0.90 confidence and listed under **SPOT CHECK** in the report. Cleared, but
+  never quietly.
+- **The guard checks figures, not claims.** See above: a real number used in the
+  wrong role survives it.
+- **Cost accounting uses floats.** The reconciliation path is integer paise
+  throughout, with no exceptions; the USD/INR estimate in `agent/llm.py` is not.
+  It never touches a settlement.
 - **Bank charges are recognised by narration keywords** (`CHARGE`, `COMMISSION`,
   `FEE`). A bank wording its fees differently gets its shortfalls escalated as
   unexplained — safe, but noisy. Production should match against the bank's

@@ -24,21 +24,46 @@ def rupees(paise: int) -> str:
     return f"{sign}Rs {p // 100:,}.{p % 100:02d}"
 
 
+class MoneyParseError(ValueError):
+    """A money field that could not be read. Never silently becomes zero."""
+
+
+RUPEE_SIGN = "₹"
+
+
 def to_paise(rupee_str: str) -> int:
     """Parse a decimal rupee string into integer paise without touching float.
 
     '1234.56' -> 123456 ;  '1234.5' -> 123450 ;  '1234' -> 123400
+    '(1,234.56)' -> -123456   (accounting parentheses mean negative)
+
+    Refuses rather than guesses. An empty string used to return 0 and '--5'
+    used to return +500, so a blank cell and a typo both became plausible
+    money. In a reconciler a wrong zero is worse than a crash: it balances.
     """
-    s = str(rupee_str).strip().replace(",", "").replace("Rs", "").strip()
-    neg = s.startswith("-")
-    if neg:
-        s = s[1:]
-    if "." in s:
-        whole, frac = s.split(".", 1)
-        frac = (frac + "00")[:2]
-    else:
-        whole, frac = s, "00"
-    val = int(whole or "0") * 100 + int(frac or "0")
+    raw = str(rupee_str)
+    s = raw.strip()
+    for junk in ("Rs.", "Rs", "INR", RUPEE_SIGN, ","):
+        s = s.replace(junk, "")
+    s = s.strip()
+
+    neg = False
+    if s.startswith("(") and s.endswith(")"):
+        neg, s = True, s[1:-1].strip()
+    if s.startswith("-"):
+        neg, s = True, s[1:].strip()
+    if s.startswith("+"):
+        s = s[1:].strip()
+
+    if not s:
+        raise MoneyParseError(f"empty money value ({raw!r})")
+
+    whole, _, frac = s.partition(".")
+    frac = (frac + "00")[:2] if frac else "00"
+    if not (whole + frac).isdigit() or (whole and not whole.isdigit()):
+        raise MoneyParseError(f"not a money value: {raw!r}")
+
+    val = int(whole or "0") * 100 + int(frac)
     return -val if neg else val
 
 
@@ -242,9 +267,16 @@ class GroundTruth:
     expected_disposition: Disposition
     injected_delta: int
     note: str = ""
+    #: Reason codes other than `true_class` that are also defensible for this
+    #: settlement. Empty for the main set, where each unit carries exactly one
+    #: defect and exactly one code is right. Populated for the adversarial
+    #: holdout, where a settlement carries TWO defects at once and a
+    #: single-label classifier cannot be marked wrong for naming either of them.
+    also_acceptable: tuple = ()
 
     def to_dict(self) -> dict:
         d = asdict(self)
         d["true_class"] = self.true_class.value
         d["expected_disposition"] = self.expected_disposition.value
+        d["also_acceptable"] = list(self.also_acceptable)
         return d

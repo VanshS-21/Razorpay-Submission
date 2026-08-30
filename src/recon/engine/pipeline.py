@@ -48,17 +48,11 @@ def run(datadir: Path, use_llm: bool = False, model: str | None = None,
     if use_llm or stub:
         agent_report = _run_agent(findings, m, units, order_index,
                                   model, narrate_limit, stub)
-        # Re-classify: a narration-resolved match changes the arithmetic, so the
-        # verdict must be recomputed from the deterministic rules rather than
-        # patched. The model never edits a disposition.
-        if agent_report.get("matches_accepted"):
-            for sid, u in units.items():
-                u.bank_credits = m.assigned.get(sid) or []
-            findings = [classify(units[sid], m, order_index) for sid in units]
-            from ..agent.narrate import narrate_exceptions  # noqa: PLC0415
-            agent_report["narrations_accepted"] = narrate_exceptions(
-                findings, units, agent_report["_client"], agent_report["model"],
-                agent_report["_usage"], agent_report["_stats"], narrate_limit)
+        # No re-classification, because nothing the model returned changed the
+        # arithmetic. Its identity suggestions are attached to the exceptions
+        # they concern, as a lead for the human, and the verdict stands exactly
+        # as the deterministic engine left it.
+        _attach_proposals(findings, agent_report.get("proposals") or [])
         agent_report = _finalise_agent_report(agent_report, len(units))
 
     timing = {
@@ -72,6 +66,29 @@ def run(datadir: Path, use_llm: bool = False, model: str | None = None,
         "orders": len(orders),
     }
     return findings, m, units, timing, agent_report
+
+
+def _attach_proposals(findings, proposals):
+    """Hand the model's identity suggestions to the human, as leads only.
+
+    A proposal is added to `action_required` and nowhere else. It cannot reach
+    `disposition`, `reason_code` or `delta`, because it is never given to the
+    classifier -- which is the strongest form the guarantee can take: not a
+    check that the model behaved, but no code path by which it could not.
+    """
+    if not proposals:
+        return
+    by_sid = {}
+    for p in proposals:
+        by_sid.setdefault(p["settlement_id"], []).append(p)
+    for f in findings:
+        for p in by_sid.get(f.settlement_id, []):
+            f.action_required = (
+                f"{f.action_required} "
+                f"LEAD (model-suggested, unverified): bank row {p['txn_id']} on "
+                f"{p['value_date']} -- \"{p['narration']}\" -- ties on amount and "
+                f"date. Confirm with the bank before treating it as settled."
+            ).strip()
 
 
 def _run_agent(findings, m, units, order_index, model, narrate_limit, stub=None):
@@ -91,14 +108,15 @@ def _run_agent(findings, m, units, order_index, model, narrate_limit, stub=None)
     stats = GuardStats()
 
     t = time.perf_counter()
-    matches = resolve_unmatched(m, units, client, model, usage, stats)
+    proposals = resolve_unmatched(m, units, client, model, usage, stats)
     narrations = narrate_exceptions(findings, units, client, model, usage,
                                     stats, narrate_limit)
 
     return {
         "model": model,
         "is_stub": bool(stub),
-        "matches_accepted": matches,
+        "proposals": proposals,
+        "matches_proposed": len(proposals),
         "narrations_accepted": narrations,
         "seconds": round(time.perf_counter() - t, 3),
         "_client": client,

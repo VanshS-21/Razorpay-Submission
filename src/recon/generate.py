@@ -45,6 +45,15 @@ FEE_BPS = 200          # 2.00%
 GST_BPS = 1800         # 18% on the fee
 DISPUTE_FEE = 150000   # Rs 1,500 flat chargeback handling fee
 
+#: Defect classes that act on an order from an EARLIER settlement. None of them
+#: can be injected into the first settlement of a run, so the schedule is
+#: reordered to keep one of them out of slot zero. See Generator.run.
+NEEDS_PRIOR_ORDERS = frozenset({
+    AnomalyClass.REFUND_NETTED_LATER,
+    AnomalyClass.CHARGEBACK_DEDUCTION,
+    AnomalyClass.SPLIT_REFUND,
+})
+
 METHODS = ["upi", "card", "netbanking", "wallet", "emi"]
 
 #: Relative frequency of each injected class. See module docstring on inflation.
@@ -291,6 +300,19 @@ class Generator:
         schedule = allocate(self.n_settlements, self.weights)
         self.rng.shuffle(schedule)
 
+        # A refund, chargeback or split refund acts on an order from an EARLIER
+        # settlement, so none of them can be injected into the first one -- there
+        # is no history yet. This used to be handled by skipping the injection
+        # (`if prior_orders:`) while still writing the ground-truth record, so
+        # the key asserted a chargeback that was not in the data. It fired on 5
+        # of 40 seeds and no test could see it, because the delta genuinely was
+        # zero. Put a class that needs no history first instead, and let the
+        # assertions below enforce the invariant from now on.
+        head = next((i for i, c in enumerate(schedule)
+                     if c not in NEEDS_PRIOR_ORDERS), None)
+        if head is not None:
+            schedule.insert(0, schedule.pop(head))
+
         for i, cls in enumerate(schedule):
             d = self.start + timedelta(days=i)
             if cls is AnomalyClass.CONSOLIDATED_PAYOUT:
@@ -383,17 +405,25 @@ class Generator:
             note = "Sub-rupee fee/GST rounding drift between per-line and aggregate totals"
 
         elif cls is AnomalyClass.REFUND_NETTED_LATER:
-            if prior_orders:
-                oid, pid, amt = self.rng.choice(prior_orders)
-                created = d - timedelta(days=self.rng.randint(5, 25))
-                lines.append(self._refund_line(setl_id, utr, d, oid, pid, amt, created))
-                note = f"Refund for order {oid} raised {created} but netted into this payout"
+            assert prior_orders, (
+                f"{setl_id} is labelled refund_netted_later but no earlier order "
+                f"exists to raise a refund against; the key would claim a defect "
+                f"that is not in the data")
+            oid, pid, amt = self.rng.choice(prior_orders)
+            created = d - timedelta(days=self.rng.randint(5, 25))
+            lines.append(self._refund_line(setl_id, utr, d, oid, pid, amt, created))
+            note = f"Refund for order {oid} raised {created} but netted into this payout"
+
 
         elif cls is AnomalyClass.CHARGEBACK_DEDUCTION:
-            if prior_orders:
-                oid, pid, amt = self.rng.choice(prior_orders)
-                lines.append(self._dispute_line(setl_id, utr, d, oid, pid, amt))
-                note = f"Chargeback on {oid} plus Rs 1,500 handling fee deducted from payout"
+            assert prior_orders, (
+                f"{setl_id} is labelled chargeback_deduction but no earlier order "
+                f"exists to raise a chargeback against; the key would claim a defect "
+                f"that is not in the data")
+            oid, pid, amt = self.rng.choice(prior_orders)
+            lines.append(self._dispute_line(setl_id, utr, d, oid, pid, amt))
+            note = f"Chargeback on {oid} plus Rs 1,500 handling fee deducted from payout"
+
 
         elif cls is AnomalyClass.LEDGER_MISMATCH:
             # Two payment lines are wrong by equal and opposite amounts. The
@@ -403,7 +433,12 @@ class Generator:
             if len(lines) >= 2:
                 a, b = self.rng.sample([l for l in lines
                                         if l.type is EntityType.PAYMENT], 2)
-                shift = self.rng.randint(5_000, 80_000)   # Rs 50 - Rs 800
+                # Rs 50 - Rs 800, but never more than half the smaller line:
+                # shifting Rs 800 off a Rs 99 payment produced a NEGATIVE gross
+                # amount, which is not a thing, and it reached the human-facing
+                # note ("booked at -Rs 261.75").
+                ceiling = max(1, min(80_000, min(a.amount, b.amount) // 2))
+                shift = self.rng.randint(min(5_000, ceiling), ceiling)
                 a.amount += shift
                 a.credit += shift
                 b.amount -= shift
@@ -413,14 +448,18 @@ class Generator:
                         f"unaffected")
 
         elif cls is AnomalyClass.SPLIT_REFUND:
-            if prior_orders:
-                oid, pid, amt = self.rng.choice(prior_orders)
-                half = amt // 2
-                lines.append(self._refund_line(setl_id, utr, d, oid, pid, half,
-                                               d - timedelta(days=1), partial=True))
-                # Remainder lands in the next settlement, keeping the paise exact.
-                self._pending_splits.append((oid, pid, amt - half))
-                note = f"Order {oid} refunded in two parts across consecutive settlements"
+            assert prior_orders, (
+                f"{setl_id} is labelled split_refund but no earlier order "
+                f"exists to raise a split refund against; the key would claim a defect "
+                f"that is not in the data")
+            oid, pid, amt = self.rng.choice(prior_orders)
+            half = amt // 2
+            lines.append(self._refund_line(setl_id, utr, d, oid, pid, half,
+                                           d - timedelta(days=1), partial=True))
+            # Remainder lands in the next settlement, keeping the paise exact.
+            self._pending_splits.append((oid, pid, amt - half))
+            note = f"Order {oid} refunded in two parts across consecutive settlements"
+
 
         expected_net = sum(l.net for l in lines)
 

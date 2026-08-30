@@ -26,8 +26,29 @@ from dataclasses import dataclass, field
 from ..engine.arithmetic import DATE_WINDOW_DAYS
 from ..engine.matcher import _days_apart
 
-#: Rs 1,234.56 / Rs 1234.56 / Rs 12,34,567.89 -- any figure the model may write.
-_MONEY = re.compile(r"Rs\s*([\d,]+(?:\.\d{1,2})?)")
+#: Every ordinary way of writing an Indian rupee figure. The original pattern
+#: was `Rs\s*([\d,]+...)` and claimed to catch "every rupee figure"; it missed
+#: "Rs." (the commonest abbreviation of the lot), lower-case "rs", "INR", the
+#: rupee sign, its HTML entity, and any amount written with the unit trailing.
+#: A guard that only recognises the one spelling its own tests use is not a
+#: guard, and the tests confirmed the implementation rather than the property.
+_SYMBOL = r"(?:Rs\.?|INR|₹)\s*([\d,]+(?:\.\d{1,2})?)"
+_TRAILING = r"\b([\d,]+(?:\.\d{1,2})?)\s*(?:rupees?|rs\.?|inr)\b"
+_MONEY = re.compile(f"{_SYMBOL}|{_TRAILING}", re.I)
+
+#: Written before scanning, so an entity or a non-breaking space cannot smuggle
+#: a figure past the pattern.
+_ENTITIES = {
+    "&#8377;": "₹", "&#x20b9;": "₹", "&rupee;": "₹",
+    "&nbsp;": " ", "&#160;": " ", " ": " ",
+}
+
+
+def _normalise(text: str) -> str:
+    out = text or ""
+    for k, v in _ENTITIES.items():
+        out = out.replace(k, v)
+    return out
 
 
 @dataclass
@@ -58,11 +79,19 @@ class GuardStats:
 def _figures(text: str) -> set[str]:
     """Every rupee figure in a string, normalised for comparison."""
     out = set()
-    for raw in _MONEY.findall(text or ""):
+    for groups in _MONEY.findall(_normalise(text)):
+        raw = next((g for g in groups if g), "")
         cleaned = raw.replace(",", "")
+        # "Rs ," -- an interrupted thousands separator -- used to reach int("")
+        # and raise, from inside the one function whose job is to survive
+        # malformed model output. The guard was the crash vector.
+        if not cleaned.strip(".").strip():
+            continue
         if "." not in cleaned:
             cleaned += ".00"
-        whole, frac = cleaned.split(".")
+        whole, frac = cleaned.split(".", 1)
+        if not whole:
+            whole = "0"
         out.add(f"{int(whole)}.{(frac + '00')[:2]}")
     return out
 

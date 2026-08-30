@@ -94,6 +94,19 @@ def build_client():
             "the 'anthropic' package is not installed. "
             "Install it with:  pip install -e '.[agent]'") from e
 
+    # The SDK does NOT raise when there is no key: it stores api_key=None and
+    # fails per-request, which structured_call swallows into None by design. The
+    # result was a run that printed a real model id, zero tokens, "$0.0000 per
+    # 100 records" and exited 0 -- a fabricated cost figure sitting exactly
+    # where a measured one goes. Checked here so the failure is loud and early.
+    if not (os.environ.get("ANTHROPIC_API_KEY")
+            or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
+        raise LLMUnavailable(
+            "no ANTHROPIC_API_KEY in the environment. The agent layer is "
+            "optional; the deterministic engine is the product and runs "
+            "without it. To exercise the agent code path offline instead, "
+            "use --llm-stub.")
+
     try:
         return anthropic.Anthropic()
     except Exception as e:

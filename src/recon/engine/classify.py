@@ -22,6 +22,7 @@ from ..models import (
 )
 from .arithmetic import (
     DATE_WINDOW_DAYS,
+    line_drift,
     looks_like_bank_charge,
     within_rounding,
 )
@@ -78,6 +79,21 @@ def ledger_mismatches(unit: ReconUnit, orders: dict) -> list:
         if o is not None and o.gross_amount != l.amount:
             out.append((l, o))
     return out
+
+
+def internally_inconsistent_lines(unit: ReconUnit) -> list:
+    """Payment lines whose own components do not add up.
+
+    credit must equal amount - fee - tax. When it does not, the PSP's own row
+    disagrees with itself, and every total built from it inherits the error --
+    including the expected net the whole reconciliation is measured against.
+
+    `line_drift` computed exactly this and had no callers, so a settlement
+    whose lines were internally contradictory reconciled normally as long as
+    the contradictions summed to the credit. Checked here so a row that does
+    not add up is escalated rather than trusted.
+    """
+    return [(l, line_drift(l)) for l in unit.lines if line_drift(l) != 0]
 
 
 def unsupported_refunds(unit: ReconUnit, orders: dict) -> list:
@@ -181,13 +197,48 @@ def classify(unit: ReconUnit, m: MatchResult, orders: dict | None = None) -> Fin
             )
 
     # --- 2. consolidated transfer -------------------------------------------
+    # The only rule here that clears a payout on arithmetic ALONE. Nothing in
+    # the statement names the other members of the group: the bank quoted one
+    # UTR and the rest is inferred from the fact that their nets add up. That
+    # inference is almost always right and is the reason a subset-sum solver
+    # has to exist at all -- but "these payouts sum to this credit" and "this
+    # credit paid these payouts" are not the same statement, and an over-credit
+    # sitting beside an unrelated unpaid payout of the right size satisfies the
+    # first without satisfying the second.
+    #
+    # It stays RECONCILED, because escalating every consolidated transfer would
+    # bury the exception list in the one case the solver was built for. It is
+    # marked as inferred, carries reduced confidence, and is listed for spot
+    # check so the judgement is visible rather than silent. See the limitations
+    # section of the README.
     if method == "subset_sum" and group:
         return finding(
             AnomalyClass.CONSOLIDATED_PAYOUT,
             Disposition.RECONCILED,
             f"Paid in a single bank transfer jointly with {', '.join(group)}; "
-            f"the combined nets reconcile exactly.",
+            f"the combined nets reconcile exactly. Group membership is INFERRED "
+            f"from the amounts -- the statement names only one UTR.",
+            action="Spot-check: confirm with the bank that this transfer covers "
+                   "the grouped payouts.",
+            by="deterministic:inferred",
+            conf=0.9,
             delta=0,
+        )
+
+    # --- 2b. the PSP's own rows do not add up --------------------------------
+    drifted = internally_inconsistent_lines(unit)
+    if drifted:
+        worst = max(drifted, key=lambda t: abs(t[1]))
+        return finding(
+            AnomalyClass.LEDGER_MISMATCH,
+            Disposition.EXCEPTION,
+            f"{len(drifted)} settlement line(s) do not add up internally: "
+            f"{worst[0].entity_id} states a credit of {rupees(worst[0].credit)} "
+            f"but amount minus fee minus tax gives "
+            f"{rupees(worst[0].credit - worst[1])}.",
+            action="Re-fetch the settlement report from the PSP. Every total "
+                   "derived from these rows, including the expected net, is "
+                   "unreliable until they agree.",
         )
 
     # --- 3. never credited ---------------------------------------------------

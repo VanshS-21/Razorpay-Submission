@@ -64,21 +64,37 @@ def _candidates_block(units: dict, sids: list) -> str:
 
 
 def resolve_unmatched(match_result, units: dict, client, model: str,
-                      usage: Usage, stats: GuardStats) -> int:
-    """Try to place orphan bank rows. Returns the number of accepted matches.
+                      usage: Usage, stats: GuardStats) -> list[dict]:
+    """Read orphan bank rows and PROPOSE which payout each belongs to.
 
-    Accepted matches mutate the MatchResult exactly as a deterministic match
-    would, so nothing downstream needs to know a model was involved.
+    Returns a list of surviving proposals. It does not place them.
+
+    This used to mutate the MatchResult exactly as a deterministic match would,
+    on the reasoning that a proposal which passes the guard is one the engine
+    could defend without mentioning a model. That reasoning is wrong in the one
+    case the path exists for. Rows reach here precisely BECAUSE arithmetic could
+    not identify them -- an ambiguous row is one where several unpaid
+    settlements share the same net inside the same window, so re-applying the
+    amount-and-date test cannot discriminate either. Every candidate passes, and
+    whichever one the model named got cleared. The guard was checking a
+    condition that was already true by construction.
+
+    So the model no longer places anything. It reads narration prose, which is
+    the thing it is genuinely better at than a regular expression, and its
+    suggestion is attached to the exception for the human who has to act on it.
+    A verdict is never moved. That is now true because the code cannot express
+    the alternative, rather than because a test asserted it on data where the
+    path never ran.
     """
     unmatched = [sid for sid in units if not match_result.assigned.get(sid)]
     if not unmatched:
-        return 0
+        return []
 
     rows = list(match_result.orphan_bank) + [r for r, _ in match_result.ambiguous]
     if not rows:
-        return 0
+        return []
 
-    accepted = 0
+    proposals: list[dict] = []
     for row in rows:
         still_open = [s for s in unmatched if not match_result.assigned.get(s)]
         if not still_open:
@@ -101,11 +117,13 @@ def resolve_unmatched(match_result, units: dict, client, model: str,
         if not verify_match(out, units, row, stats):
             continue
 
-        sid = out["settlement_id"]
-        match_result.assigned[sid].append(row)
-        match_result.method[sid] = "llm_narration"
-        match_result.needed_fallback.add(sid)
-        units[sid].bank_credits = match_result.assigned[sid]
-        accepted += 1
+        proposals.append({
+            "settlement_id": out["settlement_id"],
+            "txn_id": row.txn_id,
+            "value_date": row.value_date,
+            "narration": row.narration,
+            "credit": row.credit,
+            "debit": row.debit,
+        })
 
-    return accepted
+    return proposals

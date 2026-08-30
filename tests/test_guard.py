@@ -188,3 +188,74 @@ def test_guard_stats_track_rejection_rate():
     assert s.checked == 2
     assert s.rejected == 1
     assert s.rejection_rate == 0.5
+
+# --------------------------------------------------------------------------
+# What counts as a rupee figure
+#
+# The pattern used to be `Rs\s*([\d,]+...)` under a docstring claiming it
+# extracted "every rupee figure". It recognised exactly one spelling, and the
+# tests used only that spelling -- so they confirmed the implementation and
+# told us nothing about the property. Nine of the fifteen forms below walked
+# straight past it, including "Rs." which is the commonest of the lot.
+# --------------------------------------------------------------------------
+
+CAUGHT = [
+    "the bank is short by Rs 5,000.00",
+    "the bank is short by Rs. 5,000.00",
+    "the bank is short by RS 5,000.00",
+    "the bank is short by rs 5,000.00",
+    "the bank is short by INR 5,000.00",
+    "the bank is short by ₹5,000.00",
+    "the bank is short by &#8377;5,000.00",
+    "the bank is short by 5,000.00 rupees",
+    "the bank is short by Rs&nbsp;5,000.00",
+    "the bank is short by Rs 5000",
+    "the bank is short by 5000 INR",
+]
+
+
+@pytest.mark.parametrize("text", CAUGHT)
+def test_an_invented_figure_is_caught_however_it_is_spelled(text):
+    stats = GuardStats()
+    # 123456 paise is the only figure the engine computed; 5000.00 is invented.
+    assert verify_narration(text, {123456}, stats) is False
+    assert stats.rejected == 1
+
+
+@pytest.mark.parametrize("text", CAUGHT)
+def test_the_same_spellings_pass_when_the_figure_is_real(text):
+    """A guard that rejects everything is safe and useless.
+
+    Every spelling above must also be ACCEPTED when the number is one the
+    engine actually derived, or the broadened pattern would just be a new way
+    to throw away good notes.
+    """
+    stats = GuardStats()
+    assert verify_narration(text, {500000}, stats) is True
+    assert stats.rejected == 0
+
+
+@pytest.mark.parametrize("text", [
+    "a shortfall of Rs ,",          # interrupted thousands separator
+    "a shortfall of Rs .",
+    "a shortfall of Rs",
+    "",
+    "order_12345 and payment_99 need review",   # digits, but not money
+])
+def test_malformed_output_is_survived_not_crashed(text):
+    """The guard must never be the thing that takes down the run.
+
+    "Rs ," reached int("") and raised, from inside the one function whose whole
+    job is to survive whatever a model emits -- so the component protecting the
+    report was also the one component that could destroy it.
+    """
+    stats = GuardStats()
+    assert verify_narration(text, {123456}, stats) is True
+
+
+def test_an_order_id_is_not_read_as_money():
+    """Bare digits are not figures; only digits wearing a currency are."""
+    stats = GuardStats()
+    assert verify_narration(
+        "order_78910 was booked twice under reference 55512345",
+        {123456}, stats) is True

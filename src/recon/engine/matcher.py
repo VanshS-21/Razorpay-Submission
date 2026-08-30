@@ -60,6 +60,8 @@ class MatchResult:
     needed_fallback: set = field(default_factory=set)
     #: rows pass 2 could not place -- the residue offered to the language model
     ambiguous: list = field(default_factory=list)
+    #: settlements that had an unreferenced transfer charge attached in pass 2b
+    charge_attached: set = field(default_factory=set)
 
 
 def subset_summing_to(target: int, candidates: list[tuple[str, int]],
@@ -73,14 +75,25 @@ def subset_summing_to(target: int, candidates: list[tuple[str, int]],
 
     Returns the settlement ids, or None. Exact-match only, no tolerance --
     a consolidated transfer is the arithmetic sum of its parts.
+
+    A solution is only returned when it is the ONLY solution. If two different
+    subsets both sum to the credit, arithmetic has not identified anything: it
+    has found a coincidence and picked whichever came first in iteration order.
+    Clearing a payout on that basis is a guess wearing the costume of a proof,
+    so an ambiguous target resolves to nothing and the units escalate.
     """
     if target <= 0 or not candidates:
         return None
+    found = None
     for size in range(1, min(max_size, len(candidates)) + 1):
         for combo in combinations(candidates, size):
-            if sum(v for _, v in combo) == target:
-                return [k for k, _ in combo]
-    return None
+            if sum(v for _, v in combo) != target:
+                continue
+            keys = [k for k, _ in combo]
+            if found is not None and set(keys) != set(found):
+                return None          # more than one answer: no answer
+            found = found or keys
+    return found
 
 
 def match(units: dict, bank_rows: list) -> MatchResult:
@@ -137,6 +150,28 @@ def match(units: dict, bank_rows: list) -> MatchResult:
             # is handed to the narration resolver instead of guessed at.
             res.ambiguous.append((row, hits))
 
+    # ---- pass 2b: itemised transfer charges follow their transfer ----------
+    # A NEFT/RTGS charge is levied ON a payout, so it belongs to the settlement
+    # whose credit it accompanies. Banks post it as its own row, and when the
+    # reference field is unusable there is nothing to join on. Left orphan, the
+    # charge is invisible: the payout appears to tie exactly and reconciles
+    # CLEAN, when what actually happened is that money left the account and
+    # nothing accounted for it.
+    #
+    # Attached only when the reference is unusable (a charge carrying a readable
+    # reference joined in pass 1) and exactly ONE settlement sits on that value
+    # date, so a charge is never guessed onto one of several candidates.
+    for chg in list(leftover):
+        if chg.ref_no or not chg.debit or not _is_charge(chg.narration):
+            continue
+        same_day = [sid for sid, u in units.items()
+                    if res.assigned[sid]
+                    and _days_apart(u.lines[0].settled_at, chg.value_date) == 0]
+        if len(same_day) == 1:
+            res.assigned[same_day[0]].append(chg)
+            res.charge_attached.add(same_day[0])
+            leftover.remove(chg)
+
     # ---- pass 3: bounded subset-sum ----------------------------------------
     # A credit that joined on UTR but exceeds that settlement's net may be a
     # consolidated transfer. Look for unpaid settlements nearby whose nets make
@@ -156,12 +191,18 @@ def match(units: dict, bank_rows: list) -> MatchResult:
             continue
 
         anchor_date = u.lines[0].settled_at
+        # The window is enforced against the anchor settlement AND against the
+        # value date of every credit row in the group. A transfer cannot sweep
+        # up a payout that had not been released when it left the bank.
+        credit_dates = [r.value_date for r in rows if r.credit]
         candidates = [
             (osid, ou.expected_net)
             for osid, ou in units.items()
             if osid != sid
             and not res.assigned.get(osid)
             and _days_apart(anchor_date, ou.lines[0].settled_at) <= DATE_WINDOW_DAYS
+            and all(_days_apart(cd, ou.lines[0].settled_at) <= DATE_WINDOW_DAYS
+                    for cd in credit_dates)
         ]
         found = subset_summing_to(surplus, candidates)
         if found:
