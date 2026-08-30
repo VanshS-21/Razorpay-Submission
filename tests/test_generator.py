@@ -108,6 +108,8 @@ def test_delta_equals_injected_delta(dataset):
     for sid, gt in by_t.items():
         if gt.true_class is AnomalyClass.MISSING_UTR:
             continue  # bank rows deliberately do not join on ref_no here
+        if gt.true_class is AnomalyClass.CONSOLIDATED_PAYOUT:
+            continue  # one credit spans two settlements; see the pair test below
         expected = sum(x.net for x in by_l[sid])
         observed = sum(x.credit - x.debit for x in by_b[sid])
         assert observed - expected == gt.injected_delta, (
@@ -175,6 +177,46 @@ def test_missing_utr_reference_is_unusable(dataset):
         setl_utrs = {l.settlement_utr for l in lines
                      if l.settlement_id == t.settlement_id}
         assert not (setl_utrs & good_refs), f"{t.settlement_id} is still joinable"
+
+
+def test_consolidated_payouts_come_in_pairs_that_sum_exactly(dataset):
+    """One bank credit must equal the sum of exactly two settlement nets.
+
+    If this holds, the subset-sum solver has a real target to find and is not
+    just decoration on top of a lookup.
+    """
+    lines, bank, orders, truth = dataset
+    by_l, by_b, by_t = _by_settlement(lines, bank, truth)
+
+    consolidated = [t for t in truth
+                    if t.true_class is AnomalyClass.CONSOLIDATED_PAYOUT]
+    assert consolidated and len(consolidated) % 2 == 0, "must be paired"
+
+    partner = {}
+    for t in consolidated:
+        partner[t.settlement_id] = t.note.rsplit(" ", 1)[-1]
+
+    checked = 0
+    for sid, other in partner.items():
+        credit_rows = by_b.get(sid, [])
+        if not credit_rows:
+            continue                      # this is the un-quoted half of the pair
+        credited = sum(r.credit - r.debit for r in credit_rows)
+        combined = sum(x.net for x in by_l[sid]) + sum(x.net for x in by_l[other])
+        assert credited == combined, f"{sid}+{other}: {credited} != {combined}"
+        checked += 1
+    assert checked == len(consolidated) // 2
+
+
+def test_consolidated_partner_has_no_bank_row_of_its_own(dataset):
+    """The second settlement looks unpaid. That is the whole difficulty."""
+    lines, bank, orders, truth = dataset
+    by_l, by_b, by_t = _by_settlement(lines, bank, truth)
+    unpaid = [t.settlement_id for t in truth
+              if t.true_class is AnomalyClass.CONSOLIDATED_PAYOUT
+              and not by_b.get(t.settlement_id)]
+    assert len(unpaid) == sum(
+        1 for t in truth if t.true_class is AnomalyClass.CONSOLIDATED_PAYOUT) // 2
 
 
 def test_expected_disposition_matches_taxonomy(dataset):

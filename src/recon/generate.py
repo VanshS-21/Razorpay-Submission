@@ -58,6 +58,7 @@ DEFAULT_WEIGHTS: dict[AnomalyClass, int] = {
     AnomalyClass.DUPLICATE_BANK_CREDIT: 7,
     AnomalyClass.SPLIT_REFUND: 5,
     AnomalyClass.BANK_CHARGE_ADJUSTMENT: 4,
+    AnomalyClass.CONSOLIDATED_PAYOUT: 6,
     AnomalyClass.TRUE_MISMATCH: 6,
 }
 
@@ -257,11 +258,51 @@ class Generator:
 
         for i, cls in enumerate(schedule):
             d = self.start + timedelta(days=i)
-            setl_id = self._id("setl")
-            utr = self._utr()
-            self._build_settlement(setl_id, utr, d, cls)
+            if cls is AnomalyClass.CONSOLIDATED_PAYOUT:
+                self._build_consolidated(d)
+            else:
+                self._build_settlement(self._id("setl"), self._utr(), d, cls)
 
         return self.lines, self.bank, list(self.orders.values()), self.truth
+
+    def _build_consolidated(self, d: date):
+        """Two settlements, one bank transfer.
+
+        The bank swept two same-window payouts into a single NEFT and quoted only
+        the first UTR. Joining on that UTR finds settlement A but the amount is
+        wrong by exactly the size of settlement B, and settlement B looks like it
+        was never paid at all. Both units are individually unexplainable; only
+        recognising that one credit covers a SUBSET of settlements resolves them.
+        This is the case that makes a subset-sum solver necessary rather than
+        decorative.
+        """
+        pair = []
+        for _ in range(2):
+            setl_id, utr = self._id("setl"), self._utr()
+            lines = [self._payment_line(setl_id, utr, d)
+                     for _ in range(self.rng.randint(4, 10))]
+            self.lines.extend(lines)
+            pair.append((setl_id, utr, sum(l.net for l in lines)))
+
+        (a_id, a_utr, a_net), (b_id, b_utr, b_net) = pair
+
+        self.bank.append(BankCredit(
+            txn_id=self._id("btxn"),
+            value_date=d.isoformat(),
+            narration=self.rng.choice(NARRATION_TEMPLATES).format(utr=a_utr),
+            ref_no=a_utr,               # only ONE of the two UTRs is quoted
+            debit=0,
+            credit=a_net + b_net,       # ...but the money covers both
+        ))
+
+        for sid, other in ((a_id, b_id), (b_id, a_id)):
+            self.truth.append(GroundTruth(
+                settlement_id=sid,
+                true_class=AnomalyClass.CONSOLIDATED_PAYOUT,
+                expected_disposition=expected_disposition(AnomalyClass.CONSOLIDATED_PAYOUT),
+                injected_delta=0,
+                note=f"Paid in one bank transfer jointly with {other}",
+            ))
 
     def _build_settlement(self, setl_id: str, utr: str, d: date, cls: AnomalyClass):
         lines: list[SettlementLine] = []

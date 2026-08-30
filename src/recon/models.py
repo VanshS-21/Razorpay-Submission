@@ -62,6 +62,11 @@ class AnomalyClass(str, Enum):
     DUPLICATE_BANK_CREDIT = "duplicate_bank_credit"
     SPLIT_REFUND = "split_refund"
     BANK_CHARGE_ADJUSTMENT = "bank_charge_adjustment"
+    #: The bank merged several same-window payouts into a single transfer and
+    #: quoted only one UTR. No row-to-row join can explain this: the credit is
+    #: the sum of an unknown subset of settlements, which is why the engine
+    #: needs a subset-sum solver rather than a lookup.
+    CONSOLIDATED_PAYOUT = "consolidated_payout"
     TRUE_MISMATCH = "true_mismatch"
 
 
