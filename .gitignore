@@ -8,3 +8,4 @@ out/
 *.egg-info/
 .scratch/
 .pytest-tmp/
+.hallmark/

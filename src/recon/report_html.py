@@ -2,143 +2,310 @@
 
 Design constraints, in order:
 
-1. **The safety metric leads.** False-clear rate is the first thing on the page,
-   at the largest size, with a pass/fail verdict. Match rate -- the flattering
-   number -- comes after. A report that opens with the good news and buries the
-   dangerous one is doing the reader a disservice.
+1. **The safety metric leads.** False-clear rate is the page's one loud move --
+   a flooded plate carrying the figure at display scale. Match rate, the
+   flattering number, comes after. A report that opens with good news and
+   buries the dangerous one is doing the reader a disservice.
 2. **Every exception carries its action.** An exception list without
    instructions is just a list of problems.
-3. **No network.** No CDN, no webfont, no external asset. The file opens from a
-   fresh clone, offline, and looks the same on any machine.
-4. **Prints.** Finance artefacts get printed and attached to emails.
+3. **No network.** The typeface is embedded as a data URI; there is no CDN, no
+   webfont request, no external asset. The file opens from a fresh clone,
+   offline, and looks identical on any machine.
+4. **It prints.** Finance artefacts get printed and attached to emails.
+
+Visual system: Swiss neo-grotesque on a near-white cool sheet -- an exposed
+12-column hairline grid, one grotesk (Archivo), and exactly one signal ink.
+The ink is red and it is spent entirely on risk: reconciled state gets no
+colour at all. On this page "fine" is the absence of red, which is how a
+control document should read.
 """
 
 from __future__ import annotations
 
+import base64
 import html
 import subprocess
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 
-from .models import AnomalyClass, Disposition, Finding, rupees
+from .models import AnomalyClass, Disposition, rupees
 
-CSS = """
+_ASSETS = Path(__file__).resolve().parent / "assets"
+
+
+@lru_cache(maxsize=1)
+def _font_face() -> str:
+    """Archivo (SIL Open Font License 1.1) inlined as a data URI.
+
+    Embedded rather than linked so the report stays a single file that renders
+    identically offline. Latin subset, variable 400-800: 35 KB.
+    """
+    f = _ASSETS / "archivo-latin.woff2"
+    if not f.exists():                      # degrade to a grotesk stack
+        return ""
+    b64 = base64.b64encode(f.read_bytes()).decode("ascii")
+    return (
+        "@font-face{font-family:'Archivo';font-style:normal;"
+        "font-weight:400 800;font-display:swap;"
+        f"src:url(data:font/woff2;base64,{b64}) format('woff2');}}"
+    )
+
+
+STAMP = """/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V4
+ * genre: editorial · macrostructure: Stat-Led · theme: Grid
+ * paper: oklch(99% 0.003 255) · ink: oklch(16% 0.010 255)
+ * signal ink: oklch(55% 0.21 28) red — one ink, spent entirely on risk;
+ *   reconciled state carries no colour, so "fine" reads as the absence of red
+ * display: Archivo 800 lowercase, embedded woff2 (no network)
+ * axes: light paper · grotesk-heavy display · warm accent
+ * enrichment: none — typography + constructed geometry (plate, settlement
+ *   matrix, cropped numerals, stepped bars on real recall values)
+ * nav: document masthead (page has no destinations) · footer: Ft4 colophon
+ * tone: institutional · audience: engineers and finance reviewers
+ */
+"""
+
+TOKENS = """
 :root{
-  --bg:#fbfbfa; --panel:#ffffff; --ink:#1a1a18; --muted:#6b6b66;
-  --line:#e4e4df; --line-soft:#efefeb;
-  --ok:#2f7d4f; --ok-bg:#eaf5ee;
-  --bad:#b4321f; --bad-bg:#fdeeeb;
-  --warn:#8a6116; --warn-bg:#fdf5e6;
-  --accent:#1f5fa8; --accent-bg:#eef4fb;
-  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
-  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  /* paper: never #fff -- a faintly cool near-white sheet */
+  --color-paper:oklch(99% 0.003 255);
+  --color-paper-2:oklch(97.2% 0.004 255);
+  --color-paper-3:oklch(94.5% 0.005 255);
+  --color-ink:oklch(16% 0.010 255);
+  --color-ink-2:oklch(38% 0.008 255);
+  --color-muted:oklch(54% 0.006 255);
+  --color-rule:oklch(88% 0.004 255);
+  --color-rule-2:oklch(80% 0.005 255);
+
+  /* exactly one signal ink. it means risk, and nothing else means anything. */
+  --color-signal:oklch(55% 0.21 28);
+  --color-signal-deep:oklch(46% 0.19 28);
+  --color-focus:oklch(55% 0.21 28);
+
+  --font-display:'Archivo',"Helvetica Neue",Helvetica,Arial,sans-serif;
+  --font-body:'Archivo',"Helvetica Neue",Helvetica,Arial,sans-serif;
+  --display-weight:800;
+  --tracking-display:-0.045em;
+  --tracking-label:0.09em;
+
+  --text-display:clamp(46px,9vw,104px);
+  --text-numeral:clamp(88px,17vw,232px);
+  --text-2xl:clamp(28px,3.6vw,42px);
+  --text-xl:22px; --text-lg:17px; --text-md:15px;
+  --text-sm:13.5px; --text-xs:12px;
+
+  --space-3xs:2px; --space-2xs:4px; --space-xs:8px; --space-sm:12px; --space-md:20px;
+  --space-lg:32px; --space-xl:52px; --space-2xl:84px; --space-3xl:128px;
+
+  --rule-hair:1px; --rule-solid:2px;
+  --radius-card:0; --shadow-card:none;
+  --dur-fast:180ms; --dur-mid:220ms;
+  --ease-out:cubic-bezier(.22,.61,.36,1);
+  --ease-in:cubic-bezier(.55,.06,.68,.19);
+  --ease-in-out:cubic-bezier(.65,.05,.36,1);
+
+  --shell:1180px; --col:calc(100% / 12);
 }
-@media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){
-    --bg:#14140f; --panel:#1c1c18; --ink:#eceae2; --muted:#9a978c;
-    --line:#302f28; --line-soft:#26251f;
-    --ok:#79c894; --ok-bg:#17281d;
-    --bad:#f0836c; --bad-bg:#2c1815;
-    --warn:#dfb45f; --warn-bg:#2a2113;
-    --accent:#82b4ea; --accent-bg:#151f2b;
-  }
-}
+"""
+
+CSS = TOKENS + """
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
-  font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
-.wrap{max-width:1080px;margin:0 auto;padding:40px 24px 80px}
-h1{font-size:26px;letter-spacing:-.02em;margin:0 0 4px}
-h2{font-size:13px;text-transform:uppercase;letter-spacing:.09em;
-  color:var(--muted);margin:44px 0 14px;font-weight:600}
-h3{font-size:16px;margin:0 0 6px}
-.sub{color:var(--muted);font-size:13px;margin:0}
-.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+html,body{overflow-x:clip;margin:0}
+body{
+  background:var(--color-paper);color:var(--color-ink);
+  font-family:var(--font-body);font-size:var(--text-md);line-height:1.5;
+  font-weight:400;-webkit-font-smoothing:antialiased;
+  font-variant-numeric:tabular-nums;
+}
+::selection{background:var(--color-signal);color:var(--color-paper)}
 
-/* hero ------------------------------------------------------------------ */
-.hero{border:1px solid var(--line);border-radius:12px;padding:26px 28px;
-  margin-top:26px;background:var(--panel)}
-.hero.pass{border-left:5px solid var(--ok)}
-.hero.fail{border-left:5px solid var(--bad)}
-.hero-label{font-size:12px;text-transform:uppercase;letter-spacing:.09em;
-  color:var(--muted);font-weight:600}
-.hero-fig{font-size:56px;font-weight:650;letter-spacing:-.03em;line-height:1.05;
-  margin:8px 0 2px;font-family:var(--mono);font-variant-numeric:tabular-nums}
-.pass .hero-fig{color:var(--ok)} .fail .hero-fig{color:var(--bad)}
-.hero-note{color:var(--muted);font-size:13.5px;max-width:62ch;margin:10px 0 0}
-.badge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.08em;
-  padding:3px 9px;border-radius:5px;vertical-align:middle;margin-left:10px}
-.badge.pass{background:var(--ok-bg);color:var(--ok)}
-.badge.fail{background:var(--bad-bg);color:var(--bad)}
+/* the exposed 12-column grid: content, not scaffolding ------------------ */
+.sheet{position:relative;max-width:var(--shell);margin:0 auto;
+  padding:0 var(--space-lg)}
+.sheet::before{
+  content:"";position:absolute;inset:0;pointer-events-none;z-index:0;
+  margin:0 var(--space-lg);
+  background:repeating-linear-gradient(to right,
+    var(--color-rule) 0 1px, transparent 1px var(--col));
+  opacity:.62;
+}
+.band{position:relative;z-index:1;padding:var(--space-2xl) 0}
+.band--tight{padding:var(--space-xl) 0}
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));
+  gap:var(--space-md)}
 
-/* stat grid ------------------------------------------------------------- */
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
-  gap:12px;margin-top:12px}
-.stat{border:1px solid var(--line);border-radius:10px;padding:16px 18px;
-  background:var(--panel)}
-.stat .k{font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;
-  color:var(--muted);font-weight:600}
-.stat .v{font-size:27px;font-weight:600;letter-spacing:-.02em;margin-top:5px;
-  font-family:var(--mono);font-variant-numeric:tabular-nums}
-.stat .n{font-size:12px;color:var(--muted);margin-top:2px}
+/* type ------------------------------------------------------------------ */
+h1,h2,h3{font-family:var(--font-display);font-style:normal;
+  font-weight:var(--display-weight);letter-spacing:var(--tracking-display);
+  line-height:.92;margin:0;text-transform:lowercase;
+  overflow-wrap:anywhere;min-width:0}
+h1{font-size:var(--text-display)}
+h2{font-size:var(--text-2xl)}
+h3{font-size:var(--text-lg);letter-spacing:-.02em}
+p{margin:0 0 var(--space-sm)}
+.label{font-size:var(--text-xs);font-weight:600;text-transform:uppercase;
+  letter-spacing:var(--tracking-label);color:var(--color-muted)}
+.lede{font-size:var(--text-lg);line-height:1.45;color:var(--color-ink-2);
+  max-width:58ch}
+.note-body{font-size:var(--text-sm);color:var(--color-ink-2);max-width:62ch}
+.dot-sq{display:inline-block;width:.52em;height:.52em;
+  background:var(--color-signal);vertical-align:baseline}
 
-/* split bar ------------------------------------------------------------- */
-.split{display:flex;height:10px;border-radius:5px;overflow:hidden;
-  margin:14px 0 8px;background:var(--line-soft)}
-.split i{display:block}
-.legend{display:flex;gap:18px;font-size:12.5px;color:var(--muted);flex-wrap:wrap}
-.dot{display:inline-block;width:9px;height:9px;border-radius:2px;
-  margin-right:6px;vertical-align:baseline}
+/* masthead -------------------------------------------------------------- */
+.mast{border-bottom:var(--rule-solid) solid var(--color-ink);
+  padding:var(--space-lg) 0 var(--space-sm)}
+.mast-sources{margin:var(--space-sm) 0 0}
+.mast h1{font-size:clamp(34px,5.4vw,62px)}
+.meta{border-top:var(--rule-hair) solid var(--color-rule);
+  margin-top:var(--space-sm);padding-top:var(--space-xs);
+  display:flex;flex-wrap:wrap;gap:var(--space-md)}
+.meta span{white-space:nowrap}
+
+/* the plate: one flooded band, the page's single loud move --------------- */
+.plate{position:relative;overflow:clip;margin-top:var(--space-xl);
+  background:var(--color-ink);color:var(--color-paper);
+  padding:var(--space-lg) var(--space-lg) var(--space-2xl)}
+.plate--fail{background:var(--color-signal)}
+.plate::before{content:"";position:absolute;inset:0;pointer-events-none;
+  background:repeating-linear-gradient(to right,
+    color-mix(in oklab,var(--color-paper) 16%,transparent) 0 1px,
+    transparent 1px var(--col));}
+.plate-inner{position:relative;z-index:1;
+  display:grid;grid-template-columns:repeat(12,minmax(0,1fr));
+  gap:var(--space-md);align-items:end}
+.plate .label{color:color-mix(in oklab,var(--color-paper) 72%,transparent)}
+.plate-fig{grid-column:1 / span 6;font-family:var(--font-display);
+  font-weight:var(--display-weight);font-size:var(--text-numeral);
+  letter-spacing:-.05em;line-height:.82;margin:var(--space-xs) 0 0}
+.plate-said{grid-column:8 / span 5;padding-bottom:var(--space-sm)}
+.plate-said p{font-size:var(--text-sm);
+  color:color-mix(in oklab,var(--color-paper) 78%,transparent);
+  max-width:46ch;margin:var(--space-xs) 0 0}
+.verdict{font-family:var(--font-display);font-weight:var(--display-weight);
+  font-size:var(--text-xl);letter-spacing:-.02em}
+
+/* figure cells: hairline-divided, one ruled object ---------------------- */
+.cells{border-top:var(--rule-solid) solid var(--color-ink);
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+.cell{padding:var(--space-md) var(--space-md) var(--space-lg) 0;
+  border-inline-start:var(--rule-hair) solid var(--color-rule)}
+.cell:first-child{border-inline-start:0}
+.cell:not(:first-child){padding-inline-start:var(--space-md)}
+.cell .v{font-family:var(--font-display);font-weight:var(--display-weight);
+  font-size:clamp(30px,4.2vw,50px);letter-spacing:-.04em;line-height:1;
+  margin:var(--space-xs) 0 var(--space-2xs)}
+.cell .n{font-size:var(--text-xs);color:var(--color-muted)}
+
+/* settlement matrix: one square per settlement -------------------------- */
+.matrix{display:grid;grid-template-columns:repeat(auto-fill,minmax(11px,1fr));
+  gap:var(--space-3xs);margin:var(--space-md) 0 var(--space-sm)}
+.matrix i{display:block;aspect-ratio:1;background:var(--color-rule)}
+.matrix i.x{background:var(--color-signal)}
+.key{display:flex;align-items:center;gap:var(--space-lg);flex-wrap:wrap;font-size:var(--text-xs);
+  color:var(--color-muted)}
+.key b{display:inline-block;width:9px;height:9px;margin-inline-end:7px}
+
+/* exception index: numbered rows riding the 12 columns ------------------ */
+.exc{border-top:var(--rule-hair) solid var(--color-rule);
+  display:grid;grid-template-columns:repeat(12,minmax(0,1fr));
+  gap:var(--space-md);padding:var(--space-md) 0;
+  transition:background var(--dur-fast) var(--ease-out)}
+.exc:first-of-type{border-top:var(--rule-solid) solid var(--color-ink)}
+.exc:hover{background:var(--color-paper-2)}
+.exc-n{grid-column:1 / span 1;font-family:var(--font-display);
+  font-weight:var(--display-weight);font-size:var(--text-xl);
+  letter-spacing:-.03em;color:var(--color-muted);line-height:1}
+.exc-main{grid-column:2 / span 7;min-width:0}
+.exc-side{grid-column:9 / span 4;text-align:right;min-width:0}
+.exc-id{font-size:var(--text-sm);font-weight:600;overflow-wrap:anywhere}
+.exc-code{font-size:var(--text-xs);font-weight:600;text-transform:uppercase;
+  letter-spacing:var(--tracking-label);color:var(--color-signal);
+  margin-top:var(--space-2xs)}
+.exc-amt{font-family:var(--font-display);font-weight:var(--display-weight);
+  font-size:var(--text-xl);letter-spacing:-.03em;line-height:1.1;
+  overflow-wrap:anywhere}
+.exc p{font-size:var(--text-sm);color:var(--color-ink-2);margin:var(--space-sm) 0 0;
+  max-width:62ch}
+.balances{margin-top:var(--space-sm);padding-inline-start:var(--space-sm);
+  border-inline-start:var(--rule-solid) solid var(--color-signal);
+  font-size:var(--text-sm);max-width:62ch}
+.act{margin-top:var(--space-sm);border-top:var(--rule-hair) solid var(--color-rule);
+  padding-top:var(--space-xs);font-size:var(--text-sm);max-width:62ch}
+.act .label{display:block;margin-bottom:2px}
 
 /* tables ---------------------------------------------------------------- */
-.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px;
-  background:var(--panel)}
-table{border-collapse:collapse;width:100%;font-size:13.5px}
-th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.07em;
-  color:var(--muted);font-weight:600;padding:11px 14px;
-  border-bottom:1px solid var(--line);white-space:nowrap}
-td{padding:10px 14px;border-bottom:1px solid var(--line-soft);
-  vertical-align:middle}
-tr:last-child td{border-bottom:none}
-td.num,th.num{text-align:right;font-family:var(--mono);
-  font-variant-numeric:tabular-nums;white-space:nowrap}
-.bar{position:relative;height:6px;background:var(--line-soft);border-radius:3px;
-  width:110px;display:inline-block;vertical-align:middle}
-.bar i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;
-  background:var(--accent)}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:var(--text-sm)}
+thead th{border-top:var(--rule-solid) solid var(--color-ink);
+  border-bottom:var(--rule-hair) solid var(--color-rule);
+  padding:var(--space-xs) var(--space-sm) var(--space-xs) 0;
+  text-align:left;font-size:var(--text-xs);font-weight:600;
+  text-transform:uppercase;letter-spacing:var(--tracking-label);
+  color:var(--color-muted);white-space:nowrap}
+tbody td{border-bottom:var(--rule-hair) solid var(--color-rule);
+  padding:var(--space-xs) var(--space-sm) var(--space-xs) 0;vertical-align:middle}
+tbody tr{transition:background var(--dur-fast) var(--ease-out)}
+tbody tr:hover{background:var(--color-paper-2)}
+th.num,td.num{text-align:right;white-space:nowrap;padding-inline-end:var(--space-md)}
+/* stepped bars, snapped to a track, against real numbers */
+.steps{display:flex;gap:var(--space-3xs);align-items:flex-end;height:14px;min-width:120px}
+.steps i{display:block;width:9px;background:var(--color-paper-3)}
+.steps i.on{background:var(--color-ink)}
 
-/* exception cards -------------------------------------------------------- */
-.exc{border:1px solid var(--line);border-left:4px solid var(--bad);
-  border-radius:10px;padding:18px 20px;margin-bottom:12px;background:var(--panel)}
-.exc-head{display:flex;justify-content:space-between;align-items:baseline;
-  gap:16px;flex-wrap:wrap;margin-bottom:9px}
-.exc-id{font-family:var(--mono);font-size:13px;font-weight:600}
-.exc-amt{font-family:var(--mono);font-size:17px;font-weight:650;
-  font-variant-numeric:tabular-nums;white-space:nowrap}
-.tag{display:inline-block;font-family:var(--mono);font-size:11px;
-  padding:2px 8px;border-radius:4px;background:var(--bad-bg);color:var(--bad);
-  margin-left:8px;font-weight:600}
-.exc p{margin:0 0 9px;font-size:14px}
-.act{background:var(--warn-bg);border-radius:7px;padding:10px 13px;
-  font-size:13.5px}
-.act b{color:var(--warn);font-size:11px;text-transform:uppercase;
-  letter-spacing:.07em;display:block;margin-bottom:3px}
-.flag{background:var(--accent-bg);border-radius:7px;padding:10px 13px;
-  font-size:13px;margin-bottom:9px;color:var(--ink)}
-.flag b{color:var(--accent)}
+/* notes ----------------------------------------------------------------- */
+.notes{border-top:var(--rule-solid) solid var(--color-ink);
+  display:grid;grid-template-columns:repeat(12,minmax(0,1fr));
+  gap:var(--space-md)}
+.note{grid-column:span 6;padding:var(--space-md) var(--space-md) var(--space-lg) 0;
+  border-bottom:var(--rule-hair) solid var(--color-rule)}
+.note .label{display:block;margin-bottom:var(--space-2xs)}
+.note h3{margin-bottom:var(--space-2xs)}
 
-/* notes ------------------------------------------------------------------ */
-.note{border:1px solid var(--line);border-radius:10px;padding:18px 20px;
-  background:var(--panel);font-size:13.5px;color:var(--muted)}
-.note strong{color:var(--ink)}
-.note ul{margin:9px 0 0;padding-left:20px} .note li{margin-bottom:6px}
-footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);
-  color:var(--muted);font-size:12.5px}
-a{color:var(--accent)}
+/* colophon -------------------------------------------------------------- */
+.colophon{border-top:var(--rule-solid) solid var(--color-ink);
+  margin-top:var(--space-2xl);padding:var(--space-md) 0 var(--space-2xl);
+  display:grid;grid-template-columns:repeat(12,minmax(0,1fr));
+  gap:var(--space-md);font-size:var(--text-xs);color:var(--color-muted)}
+.colophon div{grid-column:span 4}
+.colophon b{display:block;color:var(--color-ink);font-weight:600;
+  text-transform:uppercase;letter-spacing:var(--tracking-label);
+  margin-bottom:var(--space-2xs)}
+
+:focus-visible{outline:2px solid var(--color-focus);outline-offset:2px}
+
+/* responsive: verified 320 / 375 / 414 / 768 ---------------------------- */
+@media (max-width:900px){
+  .cells{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .cell:nth-child(3){border-inline-start:0;padding-inline-start:0}
+  .cell:nth-child(3),.cell:nth-child(4){
+    border-top:var(--rule-hair) solid var(--color-rule)}
+  .plate-fig{grid-column:1 / span 12}
+  .plate-said{grid-column:1 / span 12;padding-bottom:0}
+  .note{grid-column:span 12}
+  .colophon div{grid-column:span 12;margin-bottom:var(--space-sm)}
+}
+@media (max-width:680px){
+  .sheet::before{background:repeating-linear-gradient(to right,
+    var(--color-rule) 0 1px, transparent 1px calc(100% / 4));opacity:.5}
+  .band{padding:var(--space-xl) 0}
+  .exc-n{grid-column:1 / span 12;font-size:var(--text-lg)}
+  .exc-main{grid-column:1 / span 12}
+  .exc-side{grid-column:1 / span 12;text-align:left;margin-top:var(--space-2xs)}
+  .cells{grid-template-columns:minmax(0,1fr)}
+  .cell{border-inline-start:0;padding-inline-start:0;
+    border-top:var(--rule-hair) solid var(--color-rule)}
+  .cell:first-child{border-top:0}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition-duration:.01ms !important;animation-duration:.01ms !important}
+}
 @media print{
-  body{background:#fff}
-  .wrap{max-width:none;padding:0}
-  .exc,.stat,.hero,.scroll,.note{break-inside:avoid}
-  h2{margin-top:24px}
+  .sheet::before{opacity:.35}
+  .band{padding:var(--space-lg) 0;break-inside:avoid}
+  .exc,.note,.cell{break-inside:avoid}
+  .plate{background:var(--color-ink) !important;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 """
 
@@ -147,7 +314,7 @@ def _e(s) -> str:
     return html.escape(str(s if s is not None else ""))
 
 
-def _pct(x, dash="—"):
+def _pct(x, dash="&mdash;"):
     return dash if x is None else f"{x * 100:.1f}%"
 
 
@@ -160,10 +327,20 @@ def _rev() -> str:
         return "unknown"
 
 
-#: Reason codes whose defining feature is that every total balances. Worth
-#: calling out on the page, because "delta Rs 0.00" next to "escalated" looks
-#: like a bug until you know why it is the whole point.
+#: Reason codes whose defining feature is that every total balances. Called out
+#: on the page, because "Rs 0.00" beside "needs a human" reads as a bug until
+#: you know it is the entire point of holding a third source.
 _ZERO_DELTA_CLASSES = {AnomalyClass.LEDGER_MISMATCH}
+
+
+def _steps(value: float | None, n: int = 5) -> str:
+    """A stepped-bar figure against a real number. Never decorative."""
+    filled = 0 if value is None else round(value * n)
+    return ('<span class="steps" aria-hidden="true">'
+            + "".join(f'<i class="{"on" if i < filled else ""}" '
+                      f'style="height:{4 + i * 2.4:.0f}px"></i>'
+                      for i in range(n))
+            + "</span>")
 
 
 def render_html(metrics: dict, findings: list, timing: dict,
@@ -178,151 +355,201 @@ def render_html(metrics: dict, findings: list, timing: dict,
     total = metrics["settlements"]
     rate = timing["lines"] / timing["total_s"] if timing["total_s"] else 0
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    exc_ids = {f.settlement_id for f in exceptions}
 
     P = []
     A = P.append
-    A(f'<title>Settlement Reconciliation Report</title><style>{CSS}</style>')
-    A('<div class="wrap">')
+    A("<title>Settlement Reconciliation Report</title>")
+    A(f"<style>{STAMP}{_font_face()}{CSS}</style>")
+    A('<div class="sheet">')
 
-    # -- header ---------------------------------------------------------
-    A('<h1>Settlement reconciliation</h1>')
-    A(f'<p class="sub">Three-way: PSP payout &middot; bank statement &middot; '
-      f'order ledger &nbsp;|&nbsp; dataset <span class="mono">{_e(dataset)}</span>'
-      f' &nbsp;|&nbsp; {now} &nbsp;|&nbsp; commit '
-      f'<span class="mono">{_rev()}</span></p>')
+    # -- masthead --------------------------------------------------------
+    A('<header class="mast">')
+    A('<h1>settlement<br>reconciliation</h1>')
+    A('<p class="label mast-sources">three-way &middot; psp payout &middot; '
+      'bank statement &middot; order ledger</p>')
+    A('<div class="meta label">')
+    A(f'<span>dataset {_e(dataset)}</span><span>{total} settlements</span>'
+      f'<span>{timing["lines"]:,} lines</span><span>{now}</span>'
+      f'<span>commit {_rev()}</span>')
+    A('</div></header>')
 
-    # -- hero: the safety metric, first and largest ----------------------
-    A(f'<div class="hero {"pass" if passed else "fail"}">')
-    A('<div class="hero-label">False-clear rate '
-      f'<span class="badge {"pass" if passed else "fail"}">'
-      f'{"PASS" if passed else "FAIL"}</span></div>')
-    A(f'<div class="hero-fig">{_pct(metrics["false_clear_rate"])}</div>')
-    A(f'<div class="sub mono">{fc} of {metrics["must_escalate_total"]} '
-      f'must-escalate settlements were wrongly cleared</div>')
-    A('<p class="hero-note">This is the expensive error. A missed exception is '
-      'money quietly lost; an unnecessary one costs only review time. The two '
-      'are not symmetric, so this number leads the report and the match rate '
-      'follows it.</p>')
-    A('</div>')
+    # -- the plate: the page's one loud move -----------------------------
+    A(f'<section class="plate {"" if passed else "plate--fail"}">'
+      '<div class="plate-inner">')
+    A('<div style="grid-column:1 / span 12"><span class="label">'
+      'false-clear rate</span></div>')
+    A(f'<div class="plate-fig">{_pct(metrics["false_clear_rate"])}</div>')
+    A('<div class="plate-said">')
+    A(f'<div class="verdict">{"nothing wrongly cleared" if passed else "false clears present"}</div>')
+    A(f'<p>{fc} of {metrics["must_escalate_total"]} settlements that required a '
+      f'human were auto-reconciled. This is the expensive error &mdash; a missed '
+      f'exception is money quietly lost, an unnecessary one costs only review '
+      f'time. The two are not symmetric, so this figure leads and the match '
+      f'rate follows it.</p>')
+    A('</div></div></section>')
 
-    # -- stat grid -------------------------------------------------------
-    A('<h2>Run summary</h2><div class="stats">')
+    # -- figures ---------------------------------------------------------
+    A('<section class="band band--tight"><div class="cells">')
     for k, v, n in [
-        ("Match rate", _pct(metrics["match_rate"]),
+        ("match rate", _pct(metrics["match_rate"]),
          f"{reconciled} of {total} auto-reconciled"),
-        ("False escalates", str(metrics["false_escalate_count"]),
+        ("false escalates", str(metrics["false_escalate_count"]),
          "sent to a human unnecessarily"),
-        ("Reason-code accuracy", _pct(metrics["classification_accuracy"]),
+        ("reason-code accuracy", _pct(metrics["classification_accuracy"]),
          "correct cause identified"),
-        ("Throughput", f"{rate:,.0f}/s",
+        ("throughput", f"{rate:,.0f}/s",
          f"{timing['lines']:,} lines in {timing['total_s']:.3f}s"),
     ]:
-        A(f'<div class="stat"><div class="k">{k}</div>'
+        A(f'<div class="cell"><span class="label">{k}</span>'
           f'<div class="v">{_e(v)}</div><div class="n">{_e(n)}</div></div>')
-    A('</div>')
+    A('</div></section>')
 
-    # -- disposition split ----------------------------------------------
-    rp = reconciled / total * 100 if total else 0
-    A(f'<div class="split"><i style="width:{rp:.2f}%;background:var(--ok)"></i>'
-      f'<i style="width:{100 - rp:.2f}%;background:var(--bad)"></i></div>')
-    A(f'<div class="legend">'
-      f'<span><span class="dot" style="background:var(--ok)"></span>'
+    # -- settlement matrix ------------------------------------------------
+    A('<section class="band band--tight"><div class="grid">')
+    A('<div style="grid-column:1 / span 12">'
+      '<h2>every settlement in the batch<span class="dot-sq" aria-hidden="true"></span></h2></div>')
+    A('<div style="grid-column:1 / span 8">')
+    A(f'<div class="matrix" role="img" aria-label="One square per settlement: {reconciled} reconciled, {total - reconciled} escalated to a human.">')
+    for f in findings:
+        A(f'<i class="{"x" if f.settlement_id in exc_ids else ""}"></i>')
+    A('</div><div class="key">')
+    A(f'<span><b style="background:var(--color-rule)"></b>'
       f'{reconciled} reconciled</span>'
-      f'<span><span class="dot" style="background:var(--bad)"></span>'
-      f'{total - reconciled} need a human</span>'
-      f'<span>{timing["bank_rows"]:,} bank rows &middot; '
-      f'{timing["orders"]:,} orders reconciled</span></div>')
+      f'<span><b style="background:var(--color-signal)"></b>'
+      f'{total - reconciled} need a human</span>')
+    A('</div></div>')
+    A('<div style="grid-column:9 / span 4"><p class="note-body">'
+      f'One square per settlement, in batch order. '
+      f'{timing["bank_rows"]:,} bank rows and {timing["orders"]:,} orders were '
+      f'read to place them.</p></div>')
+    A('</div></section>')
 
-    # -- exception list --------------------------------------------------
-    A(f'<h2>Exception list &mdash; {len(exceptions)} need a human</h2>')
+    # -- exception index --------------------------------------------------
+    A('<section class="band"><div class="grid" style="margin-bottom:var(--space-md)">')
+    A(f'<div style="grid-column:1 / span 7"><h2>exceptions</h2>'
+      f'<p class="lede" style="margin-top:var(--space-sm)">'
+      f'{len(exceptions)} settlements the engine refused to clear. Each names '
+      f'the money, the evidence, and the next action.</p></div>')
+    A('</div>')
     if not exceptions:
-        A('<div class="note">Nothing outstanding.</div>')
-    for f in exceptions:
-        A('<div class="exc">')
-        A(f'<div class="exc-head"><span class="exc-id">{_e(f.settlement_id)}'
-          f'<span class="tag">{_e(f.reason_code.value)}</span></span>'
-          f'<span class="exc-amt">{_e(rupees(f.delta))}</span></div>')
+        A('<p class="note-body">Nothing outstanding.</p>')
+    for i, f in enumerate(exceptions, 1):
+        A('<article class="exc">')
+        A(f'<div class="exc-n">{i:02d}</div>')
+        A('<div class="exc-main">')
+        A(f'<div class="exc-id">{_e(f.settlement_id)}</div>')
+        A(f'<div class="exc-code">{_e(f.reason_code.value.replace("_", " "))}</div>')
         if f.reason_code in _ZERO_DELTA_CLASSES and f.delta == 0:
-            A('<div class="flag"><b>Every total balances.</b> The payout ties '
-              'to the bank credit to the paise. Only the order ledger '
-              'disagrees &mdash; which is why a two-way reconciliation cannot '
-              'see this at all.</div>')
+            A('<div class="balances"><strong>Every total balances.</strong> '
+              'The payout ties to the bank credit to the paise. Only the order '
+              'ledger disagrees &mdash; which is why a two-way reconciliation '
+              'cannot see this at all.</div>')
         A(f'<p>{_e(f.explanation)}</p>')
         if f.action_required:
-            A(f'<div class="act"><b>Action</b>{_e(f.action_required)}</div>')
+            A(f'<div class="act"><span class="label">action</span>'
+              f'{_e(f.action_required)}</div>')
         A('</div>')
+        A(f'<div class="exc-side"><div class="exc-amt">{_e(rupees(f.delta))}</div>'
+          f'<div class="label" style="margin-top:var(--space-2xs)">'
+          f'{"balanced" if f.delta == 0 else "difference"}</div></div>')
+        A('</article>')
+    A('</section>')
 
-    # -- per class -------------------------------------------------------
-    A('<h2>Per class</h2><div class="scroll"><table>')
-    A('<tr><th>Reason code</th><th class="num">n</th><th class="num">Precision</th>'
-      '<th class="num">Recall</th><th>&nbsp;</th></tr>')
+    # -- per class --------------------------------------------------------
+    A('<section class="band band--tight"><div class="grid" '
+      'style="margin-bottom:var(--space-md)">')
+    A('<div style="grid-column:1 / span 7"><h2>by reason code</h2></div></div>')
+    A('<div class="tablewrap"><table><thead><tr>'
+      '<th>reason code</th><th class="num">n</th><th class="num">precision</th>'
+      '<th class="num">recall</th><th>&nbsp;</th></tr></thead><tbody>')
     for r in metrics["per_class"]:
         if r["support"] == 0 and r["fp"] == 0:
             continue
-        w = (r["recall"] or 0) * 100
-        A(f'<tr><td class="mono">{_e(r["class"])}</td>'
+        A(f'<tr><td>{_e(r["class"].replace("_", " "))}</td>'
           f'<td class="num">{r["support"]}</td>'
           f'<td class="num">{_pct(r["precision"])}</td>'
           f'<td class="num">{_pct(r["recall"])}</td>'
-          f'<td><span class="bar"><i style="width:{w:.1f}%"></i></span></td></tr>')
-    A('</table></div>')
+          f'<td>{_steps(r["recall"])}</td></tr>')
+    A('</tbody></table></div></section>')
 
-    # -- agent layer -----------------------------------------------------
+    # -- agent layer ------------------------------------------------------
     if agent:
-        A('<h2>Agent layer</h2>')
+        A('<section class="band band--tight"><div class="grid" '
+          'style="margin-bottom:var(--space-md)">')
+        A('<div style="grid-column:1 / span 7"><h2>agent layer</h2>')
         if agent.get("is_stub"):
-            A('<div class="note"><strong>Scripted stub &mdash; not a real model '
-              'call.</strong> This run drove the agent code path with a client '
-              'that misbehaves on purpose, to exercise the guard offline. '
-              'Nothing below measures model quality, and the token figures the '
-              'stub reports are fabricated, so no cost is shown.</div>')
+            A('<p class="lede" style="margin-top:var(--space-sm)">'
+              'Scripted stub &mdash; not a real model call. This run drove the '
+              'agent code path with a client that misbehaves on purpose, to '
+              'exercise the guard offline. Nothing here measures model quality, '
+              'and the stub&rsquo;s token figures are fabricated, so no cost is '
+              'shown.</p>')
+        A('</div></div>')
         g = agent["guard"]
-        A('<div class="stats" style="margin-top:12px">')
-        A(f'<div class="stat"><div class="k">Guard rejections</div>'
-          f'<div class="v">{g["rejected"]}/{g["checked"]}</div>'
-          f'<div class="n">{_pct(g["rejection_rate"])} of model outputs '
-          f'overruled by arithmetic</div></div>')
-        A(f'<div class="stat"><div class="k">Notes accepted</div>'
-          f'<div class="v">{agent["narrations_accepted"]}</div>'
-          f'<div class="n">passed every figure check</div></div>')
-        A(f'<div class="stat"><div class="k">Matches accepted</div>'
-          f'<div class="v">{agent["matches_accepted"]}</div>'
-          f'<div class="n">re-verified against exact amount + date</div></div>')
+        A('<div class="cells" style="grid-template-columns:repeat(3,minmax(0,1fr))">')
+        for k, v, n in [
+            ("guard rejections", f'{g["rejected"]}/{g["checked"]}',
+             f'{_pct(g["rejection_rate"])} of model outputs overruled by arithmetic'),
+            ("notes accepted", str(agent["narrations_accepted"]),
+             "passed every figure check"),
+            ("matches accepted", str(agent["matches_accepted"]),
+             "re-verified against exact amount and date"),
+        ]:
+            A(f'<div class="cell"><span class="label">{k}</span>'
+              f'<div class="v">{_e(v)}</div><div class="n">{_e(n)}</div></div>')
         A('</div>')
         if g["reasons"]:
-            A('<div class="scroll" style="margin-top:12px"><table>')
-            A('<tr><th>Rejection reason</th><th class="num">n</th></tr>')
+            A('<div class="tablewrap" style="margin-top:var(--space-lg)">'
+              '<table><thead><tr><th>rejection reason</th>'
+              '<th class="num">n</th></tr></thead><tbody>')
             for why, n in sorted(g["reasons"].items(), key=lambda kv: -kv[1]):
-                A(f'<tr><td class="mono">{_e(why)}</td>'
-                  f'<td class="num">{n}</td></tr>')
-            A('</table></div>')
+                A(f'<tr><td>{_e(why)}</td><td class="num">{n}</td></tr>')
+            A('</tbody></table></div>')
+        A('</section>')
 
-    # -- caveats ---------------------------------------------------------
-    A('<h2>How to read this</h2><div class="note">')
-    A('<strong>These are synthetic figures scored against a generated answer '
-      'key.</strong> The key is committed alongside the data, so every number '
-      'here is re-derivable &mdash; but the same author wrote the defect '
+    # -- reading notes ----------------------------------------------------
+    A('<section class="band band--tight"><div class="grid" '
+      'style="margin-bottom:var(--space-md)">')
+    A('<div style="grid-column:1 / span 7"><h2>how to read this</h2>'
+      '<p class="lede" style="margin-top:var(--space-sm)">Synthetic figures, '
+      'scored against a generated answer key committed beside the data. Every '
+      'number is re-derivable &mdash; but the same author wrote the defect '
       'generator and the rules that detect them, which caps what a high score '
-      'on this dataset can prove.')
-    A('<ul>')
-    A('<li><strong>Near-perfect per-class scores are not a result.</strong> '
-      'They show two expressions of one set of assumptions agreeing with each '
-      'other. The honest number is the adversarial holdout, which carries two '
-      'defects per settlement and sits outside the classifier&rsquo;s design.</li>')
-    A('<li><strong>Differences of 5 paise or less are absorbed</strong> as '
-      'fee/GST rounding, so sub-rupee skimming is invisible to this system. '
-      'Deliberate, and a real hole.</li>')
-    A('<li><strong>Bank charges are identified by narration keywords.</strong> '
-      'A bank wording its fees differently gets its shortfalls escalated as '
-      'unexplained &mdash; safe, but noisy.</li>')
-    A('<li><strong>A settlement with two defects gets one reason code.</strong> '
-      'The disposition stays correct; the explanation is partial.</li>')
-    A('</ul></div>')
+      'here can prove.</p></div></div>')
+    A('<div class="notes">')
+    for i, (head, body) in enumerate([
+        ("near-perfect scores are not a result",
+         "They show two expressions of one set of assumptions agreeing with "
+         "each other. The honest number is the adversarial holdout, which "
+         "carries two defects per settlement and sits outside the "
+         "classifier's design."),
+        ("sub-rupee differences are invisible",
+         "Anything at or under 5 paise is absorbed as fee and GST rounding, so "
+         "this system cannot detect sub-rupee skimming. Deliberate, and a real "
+         "hole."),
+        ("bank charges are matched on words",
+         "A shortfall is written off only when the statement itemises it, using "
+         "a narrow keyword list. A bank wording its fees differently gets its "
+         "shortfalls escalated as unexplained &mdash; safe, but noisy."),
+        ("one reason code per settlement",
+         "A settlement carrying two defects still gets a single label. The "
+         "disposition stays correct; the explanation is partial."),
+    ], 1):
+        A(f'<div class="note"><span class="label">note {i:02d}</span>'
+          f'<h3>{head}</h3><p class="note-body">{body}</p></div>')
+    A('</div></section>')
 
-    A(f'<footer>Generated by <span class="mono">python -m recon.cli</span> '
-      f'&middot; Razorpay AI Buildathon, Track 04 &middot; full methodology and '
-      f'caveats in <span class="mono">eval/metrics.md</span> and '
-      f'<span class="mono">docs/FAILURE_LOG.md</span></footer>')
+    # -- colophon ---------------------------------------------------------
+    A('<footer class="colophon">')
+    A('<div><b>generated by</b>python -m recon.cli<br>'
+      'Razorpay AI Buildathon &middot; Track 04</div>')
+    A('<div><b>methodology</b>eval/metrics.md carries the full numbers and '
+      'their caveats</div>')
+    A('<div><b>what broke</b>docs/FAILURE_LOG.md, kept live rather than '
+      'reconstructed</div>')
+    A('</footer>')
+
     A('</div>')
     return "\n".join(P)
 

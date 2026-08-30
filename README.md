@@ -207,12 +207,23 @@ setl_4TC0N0K4440284  ledger_mismatch                   Rs 0.00
 Note the `Rs 0.00` delta. Every total balances. This is exactly the case a
 bank-versus-payout reconciliation is blind to.
 
-`out/report.html` renders the same thing for a human: the false-clear rate
-first and largest with a pass/fail verdict, then the exception list as cards,
-each carrying its action. Settlements that balance perfectly but still escalate
-get an explicit callout, because "delta Rs 0.00" next to "needs a human" looks
-like a bug until you know it is the entire point. Single file, no CDN, no
-webfont, light and dark, and it prints.
+`out/report.html` renders the same thing for a human. It is set as a control
+document rather than a dashboard: Swiss neo-grotesque on a near-white sheet, an
+exposed 12-column hairline grid, and **exactly one signal ink — red, spent
+entirely on risk**. Reconciled state carries no colour at all, so on this page
+"fine" is the absence of red, which is how an audit document should read.
+
+The false-clear rate is the one loud move: a flooded plate carrying the figure
+at display scale, before the flattering numbers. Below it, a matrix of 126
+squares — one per settlement, 19 red — then the exception index as numbered
+rows. Settlements that balance perfectly but still escalate get an explicit
+callout, because "Rs 0.00" beside "needs a human" reads as a bug until you know
+it is the entire point of holding a third source.
+
+Single file, ~85 KB. The typeface (Archivo, OFL) is embedded as a data URI, so
+there is no CDN, no webfont request, and no external asset — it opens offline
+from a fresh clone and prints clean. Tokens are exported to
+[`docs/tokens.css`](docs/tokens.css).
 
 ---
 
