@@ -1,0 +1,16 @@
+[project]
+name = "recon"
+version = "0.1.0"
+description = "Three-way settlement reconciliation agent (Razorpay AI Buildathon, Track 04)"
+requires-python = ">=3.11"
+# The deterministic core has NO third-party dependencies. `anthropic` is needed
+# only for the optional agent layer; `--no-llm` runs the whole pipeline without it.
+dependencies = []
+
+[project.optional-dependencies]
+agent = ["anthropic>=0.40"]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

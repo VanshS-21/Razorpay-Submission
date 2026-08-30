@@ -1,0 +1,469 @@
+"""Synthetic three-source dataset generator with a ground-truth answer key.
+
+This is the most important file in the project. Everything downstream is scored
+against the key it emits, so the key -- not the agent -- is what makes the
+accuracy numbers in the README falsifiable by anyone who clones the repo.
+
+It writes four files:
+    settlement_recon.csv   PSP side  (what Razorpay says it paid out)
+    bank_statement.csv     bank side (what actually landed in the account)
+    order_ledger.csv       books side(what the merchant thinks it sold)
+    ground_truth.json      the key   (what is really going on, per settlement)
+
+Anomaly rates are deliberately inflated relative to production. A real merchant
+sees 1-2% exceptions; at that rate a 60-settlement batch would contain one
+true mismatch and precision/recall on the classes that matter would be noise.
+The weights below oversample the rare-but-expensive classes so the metrics have
+real support. This is stated in the README rather than hidden.
+"""
+
+from __future__ import annotations
+
+import csv
+import json
+import random
+from dataclasses import asdict
+from datetime import date, timedelta
+from pathlib import Path
+
+from .models import (
+    AnomalyClass,
+    BankCredit,
+    EntityType,
+    GroundTruth,
+    OrderRecord,
+    SettlementLine,
+    expected_disposition,
+)
+
+# --------------------------------------------------------------------------
+# Pricing constants (Razorpay standard-ish: 2% fee, 18% GST on the fee)
+# All arithmetic is integer paise. `//` truncation is the actual bank behaviour.
+# --------------------------------------------------------------------------
+
+FEE_BPS = 200          # 2.00%
+GST_BPS = 1800         # 18% on the fee
+DISPUTE_FEE = 150000   # Rs 1,500 flat chargeback handling fee
+
+METHODS = ["upi", "card", "netbanking", "wallet", "emi"]
+
+#: Relative frequency of each injected class. See module docstring on inflation.
+DEFAULT_WEIGHTS: dict[AnomalyClass, int] = {
+    AnomalyClass.CLEAN: 40,
+    AnomalyClass.FEE_TAX_ROUNDING: 9,
+    AnomalyClass.REFUND_NETTED_LATER: 7,
+    AnomalyClass.CHARGEBACK_DEDUCTION: 7,
+    AnomalyClass.MISSING_UTR: 8,
+    AnomalyClass.TIMING_CUT: 7,
+    AnomalyClass.DUPLICATE_BANK_CREDIT: 7,
+    AnomalyClass.SPLIT_REFUND: 5,
+    AnomalyClass.BANK_CHARGE_ADJUSTMENT: 4,
+    AnomalyClass.TRUE_MISMATCH: 6,
+}
+
+NARRATION_TEMPLATES = [
+    "NEFT-{utr}-RAZORPAY SOFTWARE PVT LTD-HDFC0000060",
+    "IMPS/{utr}/RAZORPAY/SETTLEMENT",
+    "RTGS-{utr}-RAZORPAY SOFTWARE PRIVATE LIMITED",
+    "NEFT CR-HDFC0000060-RAZORPAY SOFTWARE PVT LTD-{utr}",
+]
+
+#: Narrations for the MISSING_UTR class: the reference field is unusable, so the
+#: only signal left is prose. This is the one place a language model genuinely
+#: outperforms a regex, which is why the class exists.
+GARBLED_NARRATIONS = [
+    "NEFT CR-RAZORPAY SOFTWARE PVT LTD-SETTLEMENT PAYOUT",
+    "IMPS/RAZORPAYSOFTWARE/PAYOUT/REF UNAVAILABLE",
+    "NEFT-RZRPY SOFT PVT-STLMNT-{partial}",
+    "FUND TRF FRM RAZORPAY SOFTWARE PVT LTD",
+    "NEFT CR-{typo}-RAZORPAY SOFTWARE PVT LTD",
+]
+
+
+def fee_for(amount: int) -> tuple[int, int]:
+    """Return (fee, tax) in paise for a gross amount in paise."""
+    fee = amount * FEE_BPS // 10_000
+    tax = fee * GST_BPS // 10_000
+    return fee, tax
+
+
+def allocate(n: int, weights: dict, floor: int = 5) -> list:
+    """Apportion n settlements across classes by weight, with a per-class floor.
+
+    Drawing classes randomly leaves the rare ones with 1-2 instances, and a
+    precision figure computed over two samples is not a measurement. Stratified
+    allocation guarantees every class enough support to be scored, and removes
+    sampling noise between runs so a change in the metrics reflects a change in
+    the engine rather than a change in the draw.
+    """
+    classes = list(weights)
+    total_w = sum(weights.values())
+
+    # Largest-remainder apportionment.
+    raw = {c: n * weights[c] / total_w for c in classes}
+    counts = {c: int(raw[c]) for c in classes}
+    for c in sorted(classes, key=lambda c: raw[c] - int(raw[c]), reverse=True):
+        if sum(counts.values()) >= n:
+            break
+        counts[c] += 1
+
+    # Raise anything under the floor, taking from the largest bucket that can
+    # afford it. Skipped entirely when n is too small for the floor to fit.
+    if floor * len(classes) <= n:
+        for c in classes:
+            while counts[c] < floor:
+                donor = max(classes, key=lambda x: counts[x])
+                if counts[donor] <= floor:
+                    break
+                counts[donor] -= 1
+                counts[c] += 1
+
+    out = []
+    for c in classes:
+        out.extend([c] * counts[c])
+    return out
+
+
+class Generator:
+    """Builds a coherent three-source dataset with known, labelled defects."""
+
+    def __init__(self, seed: int = 42, n_settlements: int = 60,
+                 weights: dict | None = None, start: date | None = None):
+        self.rng = random.Random(seed)
+        self.n_settlements = n_settlements
+        self.weights = weights or DEFAULT_WEIGHTS
+        self.start = start or date(2026, 6, 1)
+
+        self.lines: list[SettlementLine] = []
+        self.bank: list[BankCredit] = []
+        self.orders: dict[str, OrderRecord] = {}
+        self.truth: list[GroundTruth] = []
+
+        self._seq = 0
+        # Orders from earlier settlements, available for late refunds/disputes.
+        self._past_orders: list[tuple[str, str, int]] = []   # (order_id, payment_id, amount)
+        # Second halves of split refunds, to be dropped into a later settlement.
+        self._pending_splits: list[tuple[str, str, int]] = []
+
+    # -- id helpers --------------------------------------------------------
+
+    def _id(self, prefix: str) -> str:
+        self._seq += 1
+        alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ0123456789"
+        tail = "".join(self.rng.choice(alphabet) for _ in range(10))
+        return f"{prefix}_{tail}{self._seq:04d}"
+
+    def _utr(self) -> str:
+        return f"{self.rng.randint(10**9, 10**10 - 1)}{self.rng.choice('abcdefghijklmnopqrstuvwxyz')}{self.rng.randint(100, 999)}"
+
+    def _amount(self) -> int:
+        """A plausible order value in paise, skewed small like real commerce."""
+        bucket = self.rng.random()
+        if bucket < 0.55:
+            return self.rng.randint(9_900, 250_000)          # Rs 99 - 2,500
+        if bucket < 0.9:
+            return self.rng.randint(250_000, 2_000_000)      # Rs 2.5k - 20k
+        return self.rng.randint(2_000_000, 15_000_000)       # Rs 20k - 1.5L
+
+    # -- line builders -----------------------------------------------------
+
+    def _payment_line(self, setl_id: str, utr: str, d: date) -> SettlementLine:
+        amount = self._amount()
+        fee, tax = fee_for(amount)
+        order_id = self._id("order")
+        payment_id = self._id("pay")
+        created = d - timedelta(days=2)
+
+        self.orders[order_id] = OrderRecord(
+            order_id=order_id,
+            order_date=created.isoformat(),
+            customer_id=self._id("cust"),
+            gross_amount=amount,
+            currency="INR",
+            status="paid",
+            payment_id=payment_id,
+        )
+        self._past_orders.append((order_id, payment_id, amount))
+
+        return SettlementLine(
+            entity_id=payment_id,
+            type=EntityType.PAYMENT,
+            debit=0,
+            credit=amount - fee - tax,
+            amount=amount,
+            currency="INR",
+            fee=fee,
+            tax=tax,
+            settlement_id=setl_id,
+            settlement_utr=utr,
+            created_at=created.isoformat(),
+            settled_at=d.isoformat(),
+            payment_id=payment_id,
+            order_id=order_id,
+            method=self.rng.choice(METHODS),
+            description="Payment captured",
+        )
+
+    def _refund_line(self, setl_id: str, utr: str, d: date, order_id: str,
+                     payment_id: str, amount: int, created: date,
+                     partial: bool = False) -> SettlementLine:
+        if order_id in self.orders:
+            self.orders[order_id].status = "partially_refunded" if partial else "refunded"
+        return SettlementLine(
+            entity_id=self._id("rfnd"),
+            type=EntityType.REFUND,
+            debit=amount,
+            credit=0,
+            amount=amount,
+            currency="INR",
+            fee=0,
+            tax=0,
+            settlement_id=setl_id,
+            settlement_utr=utr,
+            created_at=created.isoformat(),
+            settled_at=d.isoformat(),
+            payment_id=payment_id,
+            order_id=order_id,
+            method=None,
+            description="Partial refund" if partial else "Full refund",
+        )
+
+    def _dispute_line(self, setl_id: str, utr: str, d: date, order_id: str,
+                      payment_id: str, amount: int) -> SettlementLine:
+        return SettlementLine(
+            entity_id=self._id("disp"),
+            type=EntityType.DISPUTE,
+            debit=amount + DISPUTE_FEE,
+            credit=0,
+            amount=amount,
+            currency="INR",
+            fee=DISPUTE_FEE,
+            tax=0,
+            settlement_id=setl_id,
+            settlement_utr=utr,
+            created_at=(d - timedelta(days=self.rng.randint(20, 60))).isoformat(),
+            settled_at=d.isoformat(),
+            payment_id=payment_id,
+            order_id=order_id,
+            method=None,
+            description="Chargeback deduction incl. handling fee",
+        )
+
+    # -- main loop ---------------------------------------------------------
+
+    def run(self):
+        schedule = allocate(self.n_settlements, self.weights)
+        self.rng.shuffle(schedule)
+
+        for i, cls in enumerate(schedule):
+            d = self.start + timedelta(days=i)
+            setl_id = self._id("setl")
+            utr = self._utr()
+            self._build_settlement(setl_id, utr, d, cls)
+
+        return self.lines, self.bank, list(self.orders.values()), self.truth
+
+    def _build_settlement(self, setl_id: str, utr: str, d: date, cls: AnomalyClass):
+        lines: list[SettlementLine] = []
+        note = ""
+        injected = 0
+
+        # Snapshot before adding this batch: late refunds and chargebacks must
+        # reference an order from an EARLIER settlement, which is precisely what
+        # makes them hard to tie back.
+        prior_orders = list(self._past_orders)
+
+        # Every settlement has a body of ordinary captured payments.
+        for _ in range(self.rng.randint(4, 14)):
+            lines.append(self._payment_line(setl_id, utr, d))
+
+        # Drain split-refund second halves ONLY into settlements already labelled
+        # SPLIT_REFUND. Letting them fall into a CLEAN settlement would put a
+        # partial refund inside a unit whose answer key says "nothing unusual
+        # here", quietly corrupting the very thing the key exists to guarantee.
+        if cls is AnomalyClass.SPLIT_REFUND and self._pending_splits:
+            for order_id, payment_id, amt in self._pending_splits:
+                lines.append(self._refund_line(setl_id, utr, d, order_id, payment_id,
+                                               amt, d - timedelta(days=1), partial=True))
+            self._pending_splits.clear()
+
+        # --- class-specific construction ---------------------------------
+
+        if cls is AnomalyClass.FEE_TAX_ROUNDING:
+            # The PSP rounds fee and GST per line; the bank moves one lump sum
+            # computed on the aggregate. The two disagree by a few paise. This is
+            # normal and must NOT create an exception -- but it is also the exact
+            # shape of a real discrepancy, just smaller, so the tolerance that
+            # absorbs it has to be justified rather than eyeballed.
+            for ln in self.rng.sample(lines, min(3, len(lines))):
+                d_paise = self.rng.choice([-2, -1, 1, 2])
+                ln.tax += d_paise
+                ln.credit -= d_paise
+            self._rounding_drift = self.rng.choice([-3, -2, -1, 1, 2, 3])
+            note = "Sub-rupee fee/GST rounding drift between per-line and aggregate totals"
+
+        elif cls is AnomalyClass.REFUND_NETTED_LATER:
+            if prior_orders:
+                oid, pid, amt = self.rng.choice(prior_orders)
+                created = d - timedelta(days=self.rng.randint(5, 25))
+                lines.append(self._refund_line(setl_id, utr, d, oid, pid, amt, created))
+                note = f"Refund for order {oid} raised {created} but netted into this payout"
+
+        elif cls is AnomalyClass.CHARGEBACK_DEDUCTION:
+            if prior_orders:
+                oid, pid, amt = self.rng.choice(prior_orders)
+                lines.append(self._dispute_line(setl_id, utr, d, oid, pid, amt))
+                note = f"Chargeback on {oid} plus Rs 1,500 handling fee deducted from payout"
+
+        elif cls is AnomalyClass.SPLIT_REFUND:
+            if prior_orders:
+                oid, pid, amt = self.rng.choice(prior_orders)
+                half = amt // 2
+                lines.append(self._refund_line(setl_id, utr, d, oid, pid, half,
+                                               d - timedelta(days=1), partial=True))
+                # Remainder lands in the next settlement, keeping the paise exact.
+                self._pending_splits.append((oid, pid, amt - half))
+                note = f"Order {oid} refunded in two parts across consecutive settlements"
+
+        expected_net = sum(l.net for l in lines)
+
+        # --- bank side ----------------------------------------------------
+
+        value_date = d
+        ref_no = utr
+        narration = self.rng.choice(NARRATION_TEMPLATES).format(utr=utr)
+        credit_amount = expected_net
+        extra_rows: list[BankCredit] = []
+
+        if cls is AnomalyClass.FEE_TAX_ROUNDING:
+            drift = getattr(self, "_rounding_drift", 1)
+            credit_amount = expected_net + drift
+            injected = drift
+
+        elif cls is AnomalyClass.MISSING_UTR:
+            ref_no = self.rng.choice(["", "NA", "-", "REF NOT AVAILABLE"])
+            tmpl = self.rng.choice(GARBLED_NARRATIONS)
+            narration = tmpl.format(partial=utr[:5], typo=utr[:4] + "XXXX")
+            note = "Bank reference field unusable; identity recoverable only from narration"
+
+        elif cls is AnomalyClass.TIMING_CUT:
+            value_date = d + timedelta(days=self.rng.randint(1, 3))
+            note = f"Payout settled {d} but credited {value_date}, crossing the period cut-off"
+
+        elif cls is AnomalyClass.DUPLICATE_BANK_CREDIT:
+            # The bank credited the same payout twice. This is money the merchant
+            # has not earned and the bank will reverse. Auto-clearing it would let
+            # the merchant spend funds that are about to vanish -> must escalate.
+            extra_rows.append(BankCredit(
+                txn_id=self._id("btxn"),
+                value_date=(d + timedelta(days=1)).isoformat(),
+                narration=self.rng.choice(NARRATION_TEMPLATES).format(utr=utr),
+                ref_no=utr,
+                debit=0,
+                credit=expected_net,
+            ))
+            injected = expected_net
+            note = "Same UTR credited twice by the bank; second credit is unearned"
+
+        elif cls is AnomalyClass.BANK_CHARGE_ADJUSTMENT:
+            charge = self.rng.choice([500, 1000, 1770, 2360, 5900])  # Rs 5 - Rs 59
+            credit_amount = expected_net - charge
+            injected = -charge
+            note = f"Bank levied a transfer charge of {charge} paise not present in the PSP report"
+
+        elif cls is AnomalyClass.TRUE_MISMATCH:
+            # A material, unexplained difference. Nothing in any source accounts
+            # for it. The only correct behaviour is to refuse to clear it.
+            gap = self.rng.randint(10_000, 500_000)
+            if self.rng.random() < 0.5:
+                gap = -gap
+            credit_amount = expected_net + gap
+            injected = gap
+            note = "Material unexplained difference between payout and bank credit"
+
+        rows = [BankCredit(
+            txn_id=self._id("btxn"),
+            value_date=value_date.isoformat(),
+            narration=narration,
+            ref_no=ref_no,
+            debit=0,
+            credit=credit_amount,
+        )] + extra_rows
+
+        self.lines.extend(lines)
+        self.bank.extend(rows)
+        self.truth.append(GroundTruth(
+            settlement_id=setl_id,
+            true_class=cls,
+            expected_disposition=expected_disposition(cls),
+            injected_delta=injected,
+            note=note or "All three sources agree",
+        ))
+
+
+# --------------------------------------------------------------------------
+# Writers
+# --------------------------------------------------------------------------
+
+def _write_csv(path: Path, rows: list, fieldnames: list[str]):
+    with path.open("w", newline="", encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=fieldnames)
+        w.writeheader()
+        for r in rows:
+            d = asdict(r)
+            for k, v in list(d.items()):
+                if hasattr(v, "value"):
+                    d[k] = v.value
+                elif v is None:
+                    d[k] = ""
+            w.writerow(d)
+
+
+def write_dataset(outdir: Path, seed: int = 42, n_settlements: int = 60):
+    outdir.mkdir(parents=True, exist_ok=True)
+    gen = Generator(seed=seed, n_settlements=n_settlements)
+    lines, bank, orders, truth = gen.run()
+
+    _write_csv(outdir / "settlement_recon.csv", lines, [
+        "entity_id", "type", "debit", "credit", "amount", "currency", "fee", "tax",
+        "settlement_id", "settlement_utr", "created_at", "settled_at",
+        "payment_id", "order_id", "method", "description",
+    ])
+    _write_csv(outdir / "bank_statement.csv", bank, [
+        "txn_id", "value_date", "narration", "ref_no", "debit", "credit",
+    ])
+    _write_csv(outdir / "order_ledger.csv", orders, [
+        "order_id", "order_date", "customer_id", "gross_amount", "currency",
+        "status", "payment_id",
+    ])
+    (outdir / "ground_truth.json").write_text(
+        json.dumps([t.to_dict() for t in truth], indent=2), encoding="utf-8"
+    )
+    return lines, bank, orders, truth
+
+
+def main(argv=None):
+    import argparse
+
+    p = argparse.ArgumentParser(description="Generate the synthetic recon dataset.")
+    p.add_argument("--out", default="data", help="output directory")
+    p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--settlements", type=int, default=120)
+    p.add_argument("--quick", action="store_true",
+                   help="small batch (8 settlements) for fast iteration")
+    a = p.parse_args(argv)
+
+    n = 8 if a.quick else a.settlements
+    lines, bank, orders, truth = write_dataset(Path(a.out), a.seed, n)
+
+    from collections import Counter
+    dist = Counter(t.true_class.value for t in truth)
+    print(f"wrote {len(lines)} settlement lines / {len(truth)} settlements "
+          f"/ {len(bank)} bank rows / {len(orders)} orders -> {a.out}/")
+    print("\nground-truth class distribution:")
+    for k, v in dist.most_common():
+        print(f"  {k:26} {v:3}")
+
+
+if __name__ == "__main__":
+    main()
