@@ -1,55 +1,36 @@
-/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V4
- * genre: editorial · macrostructure: Stat-Led · theme: Grid
- * paper: oklch(99% 0.003 255) · ink: oklch(16% 0.010 255)
- * signal ink: oklch(55% 0.21 28) red — one ink, spent entirely on risk;
- *   reconciled state carries no colour, so "fine" reads as the absence of red
- * display: Archivo 800 lowercase, embedded woff2 (no network)
- * axes: light paper · grotesk-heavy display · warm accent
- * enrichment: none — typography + constructed geometry (plate, settlement
- *   matrix, cropped numerals, stepped bars on real recall values)
- * nav: document masthead (page has no destinations) · footer: Ft4 colophon
- * tone: institutional · audience: engineers and finance reviewers
- *
- * Portable token export. The report inlines these; this file exists so the
- * system can move to another project without re-deriving it.
+/* Settlement reconciliation report - design tokens
+ * Quiet institutional register: IBM Plex Sans for text, IBM Plex Mono for
+ * every figure so rupee columns align. Hairline rules carry the structure;
+ * there is no display type and no flooded colour. One accent, red, spent
+ * only on money at risk - reconciled state carries no colour at all.
+ * Both faces are SIL OFL and embedded in the report as data URIs.
  */
 :root{
-  /* paper: never #fff -- a faintly cool near-white sheet */
-  --color-paper:oklch(99% 0.003 255);
-  --color-paper-2:oklch(97.2% 0.004 255);
-  --color-paper-3:oklch(94.5% 0.005 255);
-  --color-ink:oklch(16% 0.010 255);
-  --color-ink-2:oklch(38% 0.008 255);
-  --color-muted:oklch(54% 0.006 255);
-  --color-rule:oklch(88% 0.004 255);
-  --color-rule-2:oklch(80% 0.005 255);
+  --color-paper:oklch(99.2% 0.001 250);
+  --color-paper-2:oklch(97.6% 0.002 250);
+  --color-paper-3:oklch(95% 0.002 250);
+  --color-ink:oklch(21% 0.006 250);
+  --color-ink-2:oklch(40% 0.005 250);
+  --color-muted:oklch(53% 0.004 250);
+  --color-rule:oklch(89% 0.002 250);
+  --color-rule-2:oklch(80% 0.003 250);
 
-  /* exactly one signal ink. it means risk, and nothing else means anything. */
-  --color-signal:oklch(55% 0.21 28);
-  --color-signal-deep:oklch(46% 0.19 28);
-  --color-focus:oklch(55% 0.21 28);
+  /* one accent. it means money at risk, and nothing else means anything. */
+  --color-signal:oklch(50% 0.19 27);
+  --color-signal-soft:oklch(96% 0.02 27);
+  --color-focus:oklch(45% 0.15 250);
 
-  --font-display:'Archivo',"Helvetica Neue",Helvetica,Arial,sans-serif;
-  --font-body:'Archivo',"Helvetica Neue",Helvetica,Arial,sans-serif;
-  --display-weight:800;
-  --tracking-display:-0.045em;
-  --tracking-label:0.09em;
+  --font-body:'Plex Sans',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:'Plex Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 
-  --text-display:clamp(46px,9vw,104px);
-  --text-numeral:clamp(88px,17vw,232px);
-  --text-2xl:clamp(28px,3.6vw,42px);
-  --text-xl:22px; --text-lg:17px; --text-md:15px;
-  --text-sm:13.5px; --text-xs:12px;
+  --text-title:26px; --text-head:17px; --text-fig:30px;
+  --text-md:14.5px; --text-sm:13px; --text-xs:11.5px;
 
-  --space-3xs:2px; --space-2xs:4px; --space-xs:8px; --space-sm:12px; --space-md:20px;
-  --space-lg:32px; --space-xl:52px; --space-2xl:84px; --space-3xl:128px;
+  --space-3xs:2px; --space-2xs:4px; --space-xs:8px; --space-sm:12px;
+  --space-md:20px; --space-lg:32px; --space-xl:48px; --space-2xl:72px;
 
   --rule-hair:1px; --rule-solid:2px;
-  --radius-card:0; --shadow-card:none;
-  --dur-fast:180ms; --dur-mid:220ms;
+  --dur-fast:150ms;
   --ease-out:cubic-bezier(.22,.61,.36,1);
-  --ease-in:cubic-bezier(.55,.06,.68,.19);
-  --ease-in-out:cubic-bezier(.65,.05,.36,1);
-
-  --shell:1180px; --col:calc(100% / 12);
+  --shell:940px;
 }
