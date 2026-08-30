@@ -192,3 +192,57 @@ amount and date-window test the deterministic matcher uses. An accepted proposal
 is one the engine could defend without ever mentioning that a model was
 involved. `test_match_rejected_when_amount_is_off_by_one_paisa` pins that —
 exact means exact.
+
+---
+
+## Day 4
+
+### No card, no API key, no measurement — so I tested the part that is mine
+
+Anthropic's Console needs a card and does not take UPI, so I cannot buy API
+credits and cannot make a single real call. The agent layer stays unmeasured.
+
+What I can do is separate two questions that were tangled together:
+
+- *How good is the model?* — unanswerable here. Left unanswered, and marked as
+  unanswered in `eval/metrics.md`.
+- *Does my code behave correctly when the model misbehaves?* — entirely
+  answerable offline, and more my responsibility anyway.
+
+`src/recon/agent/fake.py` is a scripted client that misbehaves on purpose:
+`honest`, `hallucinating`, `overreaching`, `failing`, `refusing`. Waiting for a
+real model to eventually invent a number is not a test. Scripting one that
+definitely does makes the safety property a deterministic assertion.
+
+The headline invariant, asserted across all five scenarios: **whatever the model
+does — lies, overreaches, dies, or refuses — the set of settlements escalated to
+a human does not shrink, and not one verdict moves.** The model may improve the
+prose and nothing else.
+
+To keep this honest, a stubbed run prints a loud banner, reports its model id as
+`SCRIPTED-STUB[...]`, and suppresses the cost line entirely, because the token
+figures the stub produces are fabricated and a fabricated cost sitting where a
+real one goes is exactly the thing this project is arguing against.
+
+### The harness immediately found a bug in my guard
+
+Running the `honest` scenario, the guard rejected 10 of 19 perfectly valid
+notes. Reason code: `invented_figure:0.00`.
+
+`allowed_figures_for()` ended with `vals.discard(0)`. I had written that
+thinking "Rs 0.00 is never a figure worth citing." That is exactly backwards.
+In a ledger mismatch or a phantom refund **the difference IS zero** — the
+settlement ties to the paise and only the books disagree — and saying so is the
+single most important sentence in the note. My own deterministic text says "the
+errors net to Rs 0.00 across the settlement."
+
+So the guard was rejecting the truest sentence in the report, and it would have
+done so silently in production: the note falls back to the deterministic text,
+nothing errors, and the only symptom is a rejection-rate metric nobody was
+watching yet.
+
+One line deleted, one regression test added (`test_zero_is_a_citable_figure`).
+
+The general lesson, which I did not expect going in: a guard needs its **accept**
+path tested as hard as its reject path. A guard that rejects everything is
+trivially safe and completely useless, and mine was quietly drifting that way.

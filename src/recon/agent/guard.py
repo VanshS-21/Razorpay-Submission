@@ -134,5 +134,11 @@ def allowed_figures_for(unit, finding) -> set[int]:
                      abs(l.fee), abs(l.tax)})
     for b in unit.bank_credits:
         vals.update({abs(b.credit), abs(b.debit)})
-    vals.discard(0)
+
+    # Zero stays in. It was discarded here originally, on the assumption that
+    # "Rs 0.00" is never a figure worth citing -- which is exactly backwards.
+    # In a ledger mismatch or a phantom refund the difference IS zero, and that
+    # the settlement ties perfectly is the single most important thing to tell
+    # the analyst. Discarding it made the guard reject the truest sentence in
+    # the report. Caught by the scripted-client harness; see docs/FAILURE_LOG.md.
     return vals

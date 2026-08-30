@@ -21,7 +21,7 @@ from .matcher import match
 
 
 def run(datadir: Path, use_llm: bool = False, model: str | None = None,
-        narrate_limit: int | None = None):
+        narrate_limit: int | None = None, stub: str | None = None):
     """Reconcile a batch.
 
     Returns (findings, match_result, units, timing, agent_report). `agent_report`
@@ -45,9 +45,9 @@ def run(datadir: Path, use_llm: bool = False, model: str | None = None,
     t_classify = time.perf_counter() - t2
 
     agent_report = None
-    if use_llm:
+    if use_llm or stub:
         agent_report = _run_agent(findings, m, units, order_index,
-                                  model, narrate_limit)
+                                  model, narrate_limit, stub)
         # Re-classify: a narration-resolved match changes the arithmetic, so the
         # verdict must be recomputed from the deterministic rules rather than
         # patched. The model never edits a disposition.
@@ -74,14 +74,19 @@ def run(datadir: Path, use_llm: bool = False, model: str | None = None,
     return findings, m, units, timing, agent_report
 
 
-def _run_agent(findings, m, units, order_index, model, narrate_limit):
+def _run_agent(findings, m, units, order_index, model, narrate_limit, stub=None):
     from ..agent.guard import GuardStats
     from ..agent.llm import DEFAULT_MODEL, Usage, build_client
     from ..agent.narrate import narrate_exceptions
     from ..agent.resolve import resolve_unmatched
 
     model = model or DEFAULT_MODEL
-    client = build_client()          # raises LLMUnavailable; the CLI reports it
+    if stub:
+        from ..agent.fake import ScriptedClient
+        client = ScriptedClient(stub)
+        model = f"SCRIPTED-STUB[{stub}]"   # never mistakable for a real model id
+    else:
+        client = build_client()      # raises LLMUnavailable; the CLI reports it
     usage = Usage(model=model)
     stats = GuardStats()
 
@@ -92,6 +97,7 @@ def _run_agent(findings, m, units, order_index, model, narrate_limit):
 
     return {
         "model": model,
+        "is_stub": bool(stub),
         "matches_accepted": matches,
         "narrations_accepted": narrations,
         "seconds": round(time.perf_counter() - t, 3),

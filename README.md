@@ -27,6 +27,8 @@ Full results, per-class breakdown, and caveats: [`eval/metrics.md`](eval/metrics
 | Reason-code accuracy | 100.0% | not scored |
 | Throughput | 1,179 lines in 0.025s — **~46,000 lines/sec** | |
 
+72 tests. No API key or network required for any of them.
+
 **Read the false-clear rate first.** It is the count of settlements the engine
 called reconciled that the answer key says needed a human. In a finance system
 that is the expensive error: a missed exception is money quietly lost, while an
@@ -211,7 +213,7 @@ bank-versus-payout reconciliation is blind to.
 
 ```bash
 python demo.py                      # everything, one command
-python -m pytest tests/ -q          # 54 tests
+python -m pytest tests/ -q          # 72 tests
 python eval/run_eval.py             # regenerate eval/metrics.md
 ```
 
@@ -233,12 +235,40 @@ export ANTHROPIC_API_KEY=...
 python -m recon.cli --input data --out out --llm
 ```
 
-> **Not yet measured against the live API.** The agent layer is implemented,
-> guarded and unit-tested offline, but I have not had an API key in this
-> environment, so there are no real token counts, latency or cost figures for
-> it. Rather than estimate them, `eval/metrics.md` records it as unmeasured.
-> The command above prints guard rejection rate and cost per 100 records as
-> soon as a key is present.
+> **Not measured against the live API.** No API key was available, so there are
+> no real token counts, latency or cost figures. Rather than estimate them,
+> `eval/metrics.md` records the layer as unmeasured. The command above prints
+> the guard rejection rate and cost per 100 records the moment a key exists.
+
+What *is* verified offline is the part I am responsible for: that the engine
+behaves correctly when a model misbehaves.
+
+```bash
+python -m recon.cli --input data --llm-stub hallucinating
+```
+
+`--llm-stub` drives the real agent code path with a scripted client that
+misbehaves on purpose — `honest`, `hallucinating`, `overreaching`, `failing`,
+`refusing`. Waiting for a real model to eventually invent a figure is not a
+test; scripting one that definitely does makes the safety property a
+deterministic assertion.
+
+**The invariant, asserted across all five scenarios:** whatever the model does —
+lies, overreaches, dies, or refuses — the set of settlements escalated to a
+human does not shrink, and **not one verdict moves**. The model may improve the
+prose and nothing else.
+
+```
+guard rejections      49/49 (100.0%)
+    amount_mismatch: 30
+    invented_figure:9999999.99: 19
+narration notes       0 accepted
+```
+
+A stubbed run prints a loud banner, reports its model as `SCRIPTED-STUB[...]`,
+and suppresses the cost line — the stub's token figures are fabricated, and a
+fabricated cost sitting where a real one goes is the exact thing this project
+argues against.
 
 Determinism: the same seed produces byte-identical output. `python -m
 recon.generate --out d1 --seed 42` twice and diff the directories.
@@ -260,6 +290,7 @@ src/recon/
     pipeline.py        the run, with the optional agent pass
   agent/
     guard.py           re-verification of everything a model returns
+    fake.py            scripted misbehaving client, for testing the guard
     resolve.py         narration -> settlement identity (proposal only)
     narrate.py         exception notes for humans
     llm.py             client, model config, token and cost accounting

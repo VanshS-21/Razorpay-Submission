@@ -102,7 +102,23 @@ def test_allowed_figures_include_components_not_just_totals():
     assert 2000 in allowed          # fee
     assert 360 in allowed           # tax
     assert 500 in allowed           # the delta itself
-    assert 0 not in allowed         # zero is never a citable figure
+
+
+def test_zero_is_a_citable_figure():
+    """Rs 0.00 must be allowed.
+
+    In a ledger mismatch the difference IS zero -- the settlement ties to the
+    paise and only the books disagree. Saying so is the most important sentence
+    in the note, and an earlier version of the guard rejected it.
+    """
+    u = _unit()
+    f = _finding(delta=0)
+    assert 0 in allowed_figures_for(u, f)
+    s = GuardStats()
+    assert verify_narration(
+        "The settlement ties exactly: the difference is Rs 0.00.",
+        allowed_figures_for(u, f), s) is True
+    assert s.rejected == 0
 
 
 # --------------------------------------------------------------------------
