@@ -14,6 +14,7 @@ from __future__ import annotations
 import csv
 import json
 import sys
+from unittest import mock
 from pathlib import Path
 
 import pytest
@@ -590,3 +591,59 @@ def test_a_stub_run_cannot_overwrite_the_committed_measurement(tmp_path):
     assert (out / "agent-stub.json").exists(), "stub output went nowhere"
     stub = json.loads((out / "agent-stub.json").read_text(encoding="utf-8"))
     assert stub["is_stub"] is True
+
+
+# --------------------------------------------------------------------------
+# The vendor call must use arguments the vendor's SDK accepts
+# --------------------------------------------------------------------------
+
+class _RecordingInteractions:
+    """Captures exactly what GeminiBackend passes to the SDK."""
+
+    def __init__(self):
+        self.kwargs = None
+        self.interactions = self
+
+    def create(self, **kwargs):
+        self.kwargs = kwargs
+        raise RuntimeError("captured; not sending")
+
+
+def test_gemini_call_uses_arguments_the_sdk_accepts():
+    """A stub built to one vendor's wire shape cannot check the other's.
+
+    `max_output_tokens=` was added to GeminiBackend to close a review finding
+    that the parameter was being dropped. It is not an argument
+    interactions.create() takes: the SDK raises TypeError before any request
+    goes out. A 19-call batch produced 19 errors, 0 calls and 0 tokens, and
+    every test still passed, because the only test of the agent layer drives a
+    scripted client written to the Anthropic shape.
+
+    The first version of THIS test also missed it, because _attempt catches
+    every exception by design, so a bad signature looks like any other error
+    from the outside. It therefore captures the real call site's arguments and
+    replays them against the real SDK. An unexpected keyword raises TypeError
+    locally, so no request is made and no quota is spent.
+    """
+    genai = pytest.importorskip(
+        "google.genai", reason="google-genai is an optional dependency")
+
+    recorder = _RecordingInteractions()
+    backend = llm.GeminiBackend(recorder)
+    usage = Usage(model="gemini-3.7-flash")
+    with mock.patch.object(llm, "GEMINI_MIN_INTERVAL", 0.0):
+        backend._attempt("gemini-3.7-flash", "sys", "prompt",
+                         {"type": "object"}, usage, 4096, last=True)
+
+    assert recorder.kwargs is not None, "the backend never called the SDK"
+
+    real = genai.Client(api_key="dummy-key-not-real")
+    try:
+        real.interactions.create(**recorder.kwargs)
+    except TypeError as e:
+        pytest.fail(
+            f"GeminiBackend calls interactions.create with arguments the "
+            f"installed SDK does not accept: {e}; "
+            f"passed: {sorted(recorder.kwargs)}")
+    except Exception:
+        pass          # reached the network or auth layer: the signature is fine

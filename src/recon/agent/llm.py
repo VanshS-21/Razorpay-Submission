@@ -363,10 +363,25 @@ class GeminiBackend(Backend):
                     "mime_type": "application/json",
                     "schema": schema,
                 },
-                # Was accepted by complete() and then dropped on the floor, so
-                # raising the ceiling changed nothing on the only vendor this
-                # project has actually called.
-                max_output_tokens=max_tokens,
+                # No output cap is sent. `max_tokens` is accepted by complete()
+                # for one signature across both vendors and is genuinely unused
+                # here, which a review correctly flagged.
+                #
+                # The fix for that flag was worse than the flag. Passing
+                # max_output_tokens= raises TypeError inside the SDK before any
+                # request goes out ("Use extra_body=... to send additional
+                # request body fields"), so a 19-call batch produced 19 errors,
+                # zero calls and zero tokens -- a total outage of the live path,
+                # introduced to close a nice-to-have. It shipped because the
+                # only test of this backend is a stub built to the Anthropic
+                # wire shape, which cannot see a vendor signature.
+                #
+                # extra_body={"max_output_tokens": ...} passes the SDK, but
+                # whether the API accepts that body field is unverified, and
+                # spending a whole day's free quota to find out is how the last
+                # guess went. So: no cap, stated rather than hidden. Gemini's
+                # own default applies. test_gemini_call_uses_arguments_the_sdk
+                # _accepts now checks this call against the installed SDK.
             )
             u = getattr(r, "usage", None)
             if u:
@@ -479,13 +494,15 @@ def structured_call(backend, model: str, system: str, prompt: str,
     it -- so a truncated reply is a plausible shape of failure on a path that
     has never been exercised against a live key.
 
-    Raising it to 4096 was at first inert where it mattered: GeminiBackend
-    accepted the argument and never passed it to the API, so the only vendor
-    this project has actually called ignored the ceiling entirely. It is wired
-    through now. On Anthropic the ceiling is shared with thinking tokens, and
-    4096 may still be too low; --model and an explicit cap are the operator's
-    lever. This paragraph previously claimed the change had addressed the likely
-    live failure. It had not; it had changed a number the live path never read.
+    It applies on Anthropic only. GeminiBackend accepts the argument and does
+    not send it, because `interactions.create()` has no output-cap parameter and
+    passing one raises TypeError inside the SDK before any request is made. See
+    the comment at that call site: trying to wire it through took the live path
+    from working to nineteen errors and zero calls, which is a considerably
+    worse outcome than the unused argument it was fixing.
+
+    On Anthropic the ceiling is shared with thinking tokens, so 4096 may still
+    be too low; --model and an explicit cap are the operator's lever.
     """
     out = backend.complete(model, system, prompt, schema, max_tokens, usage)
     if out is not None:
