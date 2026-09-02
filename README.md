@@ -61,7 +61,7 @@ offline from a fresh clone and prints clean.
 | Unexplained bank rows | 30, all reported | 0 |
 | Throughput | 1,149 lines; 24k-51k lines/sec across nine runs, see [`eval/metrics.md`](eval/metrics.md) | |
 
-190 tests. No API key or network required for any of them.
+191 tests. No API key or network required for any of them.
 
 **Read the false-clear rate first.** It counts settlements the engine called
 reconciled that the answer key says needed a human. That is the expensive error:
@@ -251,7 +251,7 @@ python demo.py                      # everything, one command
 open out/report.html                # visual report, self-contained and offline
 
 pip install -e ".[dev]"             # adds pytest
-python -m pytest tests/ -q          # 190 tests
+python -m pytest tests/ -q          # 191 tests
 python eval/run_eval.py             # regenerate eval/metrics.md
 python eval/check_claims.py         # verify this README against a live run
 ```
@@ -326,14 +326,16 @@ run 2   410 input · 160 output · 1,280 thinking tokens · $0.013575
   only output tokens understated run 1 by **5.8×**. The second run is an
   independent check on the same finding and agrees: 88.9% of output, 6.6×.
 - **The default model was changed to the one that answers.** It was
-  `gemini-3.7-flash` — newer, half the price, and the only one whose free tier
-  (20/day) fits a 19-call batch. Every request to it timed out. A controlled
-  retry with one variable changed had 3.5 Flash answer in seconds while 3.7 hit
-  the client timeout, so the default is now the model this project has actually
-  got answers from. 3.7 stays available through `--model`.
-- **One complete batch has been run, on a smaller dataset.** The 126-settlement
-  batch needs 19 calls and the free tier allows 5 a day. A 25-settlement batch
-  has 3 exceptions, so it fits: every exception narrated, nothing capped,
+  `gemini-3.7-flash`, which is newer and half the price. Every request to it
+  timed out. A controlled retry with one variable changed had 3.5 Flash answer
+  in seconds while 3.7 hit the client timeout, so the default is now the model
+  this project has actually got answers from. 3.7 stays available through
+  `--model`. Note that the timed-out requests still counted against the daily
+  quota: they reached Google and never came back.
+- **One complete batch has been run, on a smaller dataset.** The free tier is
+  5 requests a minute and 20 a day, so a 19-call batch fits — but only with
+  correct pacing, and that took a while to get right (below). A 25-settlement
+  batch has 3 exceptions: every exception narrated, nothing capped,
   `$0.1442 per 100 records` **measured** rather than extrapolated
   ([`out/agent-full-batch.json`](out/agent-full-batch.json)). Read it as what it
   is — that batch has a 12% exception rate against the main set's 15%, so it is

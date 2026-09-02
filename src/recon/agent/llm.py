@@ -73,11 +73,30 @@ API_KEY_VARS = {
 
 USD_TO_INR = 88.0
 
-#: Seconds to wait between Gemini calls. Free-tier keys are rate limited per
-#: minute, and a full run makes ~50 calls; without pacing most of them come back
-#: as 429s, which this module would dutifully swallow into "0 notes accepted"
-#: and report as though the model had simply declined to help.
-GEMINI_MIN_INTERVAL = float(os.environ.get("RECON_GEMINI_INTERVAL", "3.5"))
+#: Free-tier rate limits, read off the Google AI Studio dashboard rather than
+#: inferred from an error message. Both 3.5 Flash and 3.7 Flash: 5 requests per
+#: minute, 20 per day, 250K tokens per minute.
+#:
+#: The daily figure was wrong here for a week. A 429 quoting "limit: 5" was read
+#: as five requests a day, and the README, the glossary and the choice of
+#: default model were all reasoned from it. It is the per-MINUTE limit. Both
+#: models allow 20 a day, so a 19-call batch fits on either, and the argument
+#: that only one of them could run a full batch was an argument about a number
+#: that did not exist.
+GEMINI_FREE_RPM = 5
+GEMINI_FREE_RPD = 20
+
+#: Seconds between Gemini calls. 60/5 = 12s is the floor; the margin covers
+#: clock skew and the fact that the limit is enforced server-side over a window
+#: this code cannot see.
+#:
+#: This was 3.5s, which is 17 requests a minute against a limit of 5. The three
+#: runs that have succeeded here were 1, 2 and 3 calls, all of which fit inside
+#: the allowance whatever the pacing, so nothing caught it. A 19-call batch
+#: would have put seventeen requests into the first minute and collected 429s
+#: from the sixth onward -- and the module would have swallowed them into
+#: "0 notes accepted" and reported it as though the model had declined to help.
+GEMINI_MIN_INTERVAL = float(os.environ.get("RECON_GEMINI_INTERVAL", "12.5"))
 
 #: How many times to wait and try again when the API says "not yet".
 #: A 429 is not a refusal, it is a request to slow down, and counting it as an

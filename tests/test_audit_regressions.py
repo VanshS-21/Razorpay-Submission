@@ -739,3 +739,20 @@ def test_the_guard_still_rejects_a_figure_from_nowhere(tmp_path):
     assert not verify_narration(
         "The shortfall of Rs 99,99,999.99 is unexplained.", allowed, stats)
     assert stats.rejected == 1
+
+
+def test_the_gemini_pacing_respects_the_free_tier_rate_limit():
+    """3.5s between calls is 17 requests a minute against a limit of 5.
+
+    Every successful run here has been 1, 2 or 3 calls, all of which fit inside
+    the allowance whatever the pacing, so nothing caught it. A 19-call batch
+    would have put seventeen requests into the first minute and collected 429s
+    from the sixth onward, which this module swallows into "0 notes accepted".
+
+    The daily limit was also wrong for a week: a 429 quoting "limit: 5" was read
+    as five per day, when it is five per minute. Both models allow 20 a day.
+    """
+    rpm = 60.0 / llm.GEMINI_MIN_INTERVAL
+    assert rpm <= llm.GEMINI_FREE_RPM, (
+        f"pacing of {llm.GEMINI_MIN_INTERVAL}s is {rpm:.1f} requests/minute "
+        f"against a free-tier limit of {llm.GEMINI_FREE_RPM}")

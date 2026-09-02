@@ -722,3 +722,32 @@ whether it was in the allowed set.
 
 The guard rejection rate is a published number. A guard that rejects correct
 notes inflates it, and an inflated rejection rate reads as diligence.
+
+### The daily limit was the per-minute limit, and the pacing was 3x over it
+
+A 429 on 1 September said `limit: 5`. I read it as five requests a day, wrote
+that into the README and the glossary, and reasoned from it: 3.7 Flash became
+the default partly because its 20-a-day allowance was the only one a 19-call
+batch could fit in.
+
+The dashboard says otherwise. Both models: **5 requests per minute, 20 per day,
+250K tokens per minute.** The 5 was per minute. Both allow 20 a day, so a
+19-call batch fits on either, and the argument that only one of them could run a
+full batch was an argument about a number that did not exist.
+
+Worse, `GEMINI_MIN_INTERVAL` was 3.5 seconds. That is 17 requests a minute
+against a limit of 5. Every run that has ever succeeded here was 1, 2 or 3 calls
+-- small enough to fit inside the allowance whatever the pacing -- so nothing
+caught it. The first 19-call batch would have put seventeen requests into the
+first minute and collected 429s from the sixth onward, and this module swallows
+those into "0 notes accepted" and reports them as though the model had declined
+to help. The pacing is now 12.5s, and a test asserts it against the documented
+limit rather than against a number I remembered.
+
+The dashboard also settled something the code could not see: 3.7 Flash shows
+18 of 20 requests consumed. **The timed-out requests reached Google and counted.**
+A client-side timeout does not refund the quota, which is worth knowing before
+retrying a hung batch.
+
+Reading a limit off a dashboard took two minutes. Inferring it from an error
+message took a week and was wrong.
