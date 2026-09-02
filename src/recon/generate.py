@@ -590,8 +590,14 @@ def write_dataset(outdir: Path, seed: int = 42, n_settlements: int = 60):
         "order_id", "order_date", "customer_id", "gross_amount", "currency",
         "status", "payment_id",
     ])
+    # The newline is pinned explicitly. Text mode translates on write, so this
+    # file came out LF on Linux and CRLF on Windows -- and it is the answer key,
+    # the one artefact the reproducibility claim actually rests on. Git's
+    # autocrlf happened to hide it locally; a Linux CI runner would not have.
+    # The CSVs were never affected: csv.writer emits CRLF on every platform.
     (outdir / "ground_truth.json").write_text(
-        json.dumps([t.to_dict() for t in truth], indent=2), encoding="utf-8"
+        json.dumps([t.to_dict() for t in truth], indent=2),
+        encoding="utf-8", newline="\n"
     )
     return lines, bank, orders, truth
 

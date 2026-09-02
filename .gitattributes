@@ -1,0 +1,22 @@
+# Line endings are part of the reproducibility claim here, not a style question.
+#
+# `python -m recon.generate` must reproduce the committed dataset byte for byte
+# on any machine. That only holds if git hands the checkout back exactly as the
+# generator writes it, so each kind of file is pinned to what its writer emits.
+
+# Everything text is LF in the repository and in the working tree.
+* text=auto eol=lf
+
+# The three source CSVs are written by csv.writer, whose lineterminator is CRLF
+# on every platform. Git must not normalise them, or a Linux checkout would
+# differ from what the generator writes by one byte per line.
+*.csv -text
+
+# The answer key is written with newline="\n" explicitly, for the same reason
+# from the other direction.
+ground_truth.json text eol=lf
+
+# Binary.
+*.woff2 binary
+*.png binary
+*.jpg binary

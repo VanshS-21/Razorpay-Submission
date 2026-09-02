@@ -280,7 +280,8 @@ def write_holdout(outdir: Path, seed: int = 1337, per_case: int = 4):
         "order_id", "order_date", "customer_id", "gross_amount", "currency",
         "status", "payment_id"])
     (outdir / "ground_truth.json").write_text(
-        json.dumps([t.to_dict() for t in truth], indent=2), encoding="utf-8")
+        json.dumps([t.to_dict() for t in truth], indent=2),
+        encoding="utf-8", newline="\n")
     return lines, bank, orders, truth
 
 
