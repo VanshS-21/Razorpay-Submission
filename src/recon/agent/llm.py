@@ -48,17 +48,21 @@ PRICING = {
 #: Opus 5 for Anthropic deliberately: the model is describing money to a human
 #: who will act on the description, so trading quality for price is the
 #: operator's call to make explicitly via --model, not one to bury in a
-#: constant. Gemini 3.7 Flash because it is newer, half the price of 3.5 Flash,
-#: and has the larger free-tier allowance (20 calls a day against 5) -- a full
-#: batch is 19 calls, so it is the only one of the two a free key can run at all.
+#: constant. Gemini 3.5 Flash because it is the one that has actually run here.
 #:
-#: It has never been called. The one live measurement in this repo was made
-#: against gemini-3.5-flash, because 3.7's daily quota was already spent that
-#: day. Cost is reported from the model that actually ran, never from this
-#: constant, and every published token figure names 3.5-flash.
+#: gemini-3.7-flash was the default until it was tried. It is newer, half the
+#: price, and has the larger free-tier allowance (20 calls a day against 5), so
+#: on paper it is the better choice and a 19-call batch fits only on it. In
+#: practice every request to it timed out: a 19-call batch sent requests that
+#: never got answers, and a controlled retry -- same code, same key, same
+#: network, one variable changed -- had 3.5 Flash answer in seconds while 3.7
+#: hit the client timeout. It stays in PRICING and remains available through
+#: --model, because the price was read and the observation may be temporary.
+#: It is not the default, because defaulting to a model this project has never
+#: got an answer from is exactly the asymmetry it argues against elsewhere.
 DEFAULT_MODELS = {
     "anthropic": "claude-opus-5",
-    "gemini":    "gemini-3.7-flash",
+    "gemini":    "gemini-3.5-flash",
 }
 
 #: Which environment variable proves each vendor is usable.

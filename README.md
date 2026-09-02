@@ -310,24 +310,33 @@ exercised by tests that build their own ambiguous fixtures.
 Measured against Gemini. No Anthropic key was available, so that backend has
 never met a live API and is exercised only by the scripted stub.
 
-The whole live record is two calls against `gemini-3.5-flash`, committed at
-[`out/agent.json`](out/agent.json) so the arithmetic is checkable:
+The whole live record is three calls across two runs, both against
+`gemini-3.5-flash`, committed at [`out/agent.json`](out/agent.json) and
+[`out/agent-second-run.json`](out/agent-second-run.json) so the arithmetic is
+checkable:
 
 ```
-885 input · 337 output · 2,308 thinking tokens · $0.025133
+run 1   885 input · 337 output · 2,308 thinking tokens · $0.025133
+run 2   410 input · 160 output · 1,280 thinking tokens · $0.013575
 ```
 
 - **Thinking tokens are 87% of the output and 83% of the bill, and appear
   nowhere in the reply.** Gemini reasons before answering; that reasoning is
   billed at the output rate and is absent from `total_output_tokens`. Counting
-  only output tokens understated this run by **5.8×**.
-- **A full batch needs 19 model calls; the free tier allows 20 per day** on
-  `gemini-3.7-flash`, which is the default and which I have not run. The same
-  batch reconciles in 0.04 seconds with zero model calls and identical verdicts.
-- **What a full batch costs is not known.** `--narrate-limit 2` paid for two
-  notes, and the report divided that across all 126 settlements. `per_n_records`
-  now refuses to scale a capped batch. Two calls is a sample, and this section
-  quotes no per-batch figure.
+  only output tokens understated run 1 by **5.8×**. The second run is an
+  independent check on the same finding and agrees: 88.9% of output, 6.6×.
+- **The default model was changed to the one that answers.** It was
+  `gemini-3.7-flash` — newer, half the price, and the only one whose free tier
+  (20/day) fits a 19-call batch. Every request to it timed out. A controlled
+  retry with one variable changed had 3.5 Flash answer in seconds while 3.7 hit
+  the client timeout, so the default is now the model this project has actually
+  got answers from. 3.7 stays available through `--model`.
+- **What a full batch costs is not known.** A batch is 19 calls and the free
+  tier for 3.5 Flash allows 5 a day, so I have not run one. `--narrate-limit`
+  caps the calls, and `per_n_records` refuses to scale a capped batch across
+  126 settlements. Three calls is a sample, and this section quotes no
+  per-batch figure. The same batch reconciles in 0.04 seconds with zero model
+  calls and identical verdicts.
 
 Cost is reported only for a model whose price has been read, and only when the
 whole batch ran. An unpriced model prints no figure, because `$0.0000` reads as

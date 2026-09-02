@@ -607,3 +607,66 @@ to catch the first three.
 
 The habit that catches this is not "write a test". It is "revert the fix and
 watch the test fail". Seventeen of them now do.
+
+### The evening the model layer broke three times
+
+All three were mine, all three landed the same day while fixing review findings,
+and all three were invisible to a green test suite. The deterministic engine was
+untouched throughout, which is the only reason this reads as an anecdote rather
+than a disaster.
+
+**1. An argument the SDK does not take.** A review noted that `GeminiBackend`
+accepted `max_tokens` and never sent it -- rated nice-to-have. The fix passed
+`max_output_tokens=` to `interactions.create()`. That is not a parameter it
+takes; the SDK raises TypeError before any request goes out. A 19-call batch
+produced 19 errors, 0 calls, 0 tokens and no quota spent. A nice-to-have finding
+became a total outage of the live path, and 186 tests passed over it, because
+the only test of the agent layer drives a scripted client written to the
+Anthropic wire shape and cannot see a Gemini signature.
+
+**2. No request timeout.** With that fixed, the next batch ran for over half an
+hour, wrote nothing and reported nothing. `MAX_BACKOFF_S` in that same file says
+a run that hangs for ten minutes is its own kind of failure -- it caps the sleep
+BETWEEN attempts, and the attempts themselves were uncapped. The interrupt
+traceback showed the process blocked in `_receive_response_headers`: a request
+sent, no answer, forever. Nothing is written until a batch finishes, so the
+interrupt also lost whatever quota had been spent.
+
+**3. A timeout in the wrong place.** The first fix for that set
+`HttpOptions(timeout=...)` on the client. That reaches only the async client;
+the synchronous path goes through another SDK layer and ignores it. A fix that
+looked applied and did nothing -- the same shape as the `max_tokens` bug, made
+while fixing it. The timeout belongs on the call, is documented in seconds, and
+`HttpOptions.timeout` is milliseconds, so the test asserts the units as well as
+the presence.
+
+The habit that ended the run of errors was checking each call against the real
+SDK with a dummy key before writing the fix. An unexpected keyword raises
+TypeError locally, so the check costs nothing and spends no quota. It should
+have been the first thing, not the fourth.
+
+### The default model had never answered
+
+With the timeout in place, `gemini-3.7-flash` timed out cleanly instead of
+hanging. One controlled retry -- same code, same key, same network, model the
+only variable -- had `gemini-3.5-flash` answer in seconds. So the shipped
+default was a model this project had never got a single reply from, chosen on
+paper because it is newer, cheaper, and the only one whose free tier fits a
+19-call batch.
+
+The default is now 3.5 Flash. 3.7 stays in `PRICING` and remains available via
+`--model`, because the price was read and the timeouts may be temporary.
+Defaulting to it was the same asymmetry this project criticises elsewhere:
+reporting something I had not actually run.
+
+The retry paid for itself twice. It also produced a second, independent
+measurement of the thinking-token finding, which until then rested on a single
+run of two calls:
+
+```
+run 1 (2 calls)   thinking 87.3% of output tokens, 82.6% of the bill, 5.8x
+run 2 (1 call)    thinking 88.9% of output tokens, 84.9% of the bill, 6.6x
+```
+
+Both are committed. A finding that reproduces on an independent run is worth
+more than the same finding stated more confidently.
