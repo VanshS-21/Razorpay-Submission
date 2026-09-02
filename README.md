@@ -22,7 +22,7 @@ Full results, per-class breakdown, and caveats: [`eval/metrics.md`](eval/metrics
 |---|---|---|
 | Settlements | 126 | 24 |
 | **False-clear rate** | **0.0%** (0/19) | **0.0%** (0/12) |
-| False-escalate rate | 0.0% | 0.0% |
+| False-escalate rate | 0.0% (0/107) | 0.0% (0/12) |
 | Match rate | 84.9% | 50.0% |
 | Reason-code accuracy | 100.0% | 100.0%, of which 83.3% exact primary |
 | Unexplained bank rows | 30, all reported | 0 |
@@ -40,6 +40,11 @@ here spanned 24k-51k lines/sec, so three significant figures would be measuring
 the machine's mood. `eval/metrics.md` reports the median and the range it came
 from. At 1,149 lines it is not a scalability claim in any case - the dataset
 fits in cache, and pass 3 is quadratic in settlement count.
+
+The two rates have different denominators, deliberately: false clears over the
+units that **must escalate**, false escalates over the units that **should
+reconcile**. Each is the population its error can actually occur in. Dividing
+either by every settlement would have been the flattering choice.
 
 **Read the false-clear rate first.** It is the count of settlements the engine
 called reconciled that the answer key says needed a human. In a finance system

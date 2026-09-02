@@ -110,10 +110,16 @@ def main():
              f"({main_metrics['false_clear_count']}/{main_metrics['must_escalate_total']}) | "
              f"**{_pct(hold_metrics['false_clear_rate'])}** "
              f"({hold_metrics['false_clear_count']}/{hold_metrics['must_escalate_total']}) |")
+    # Both rates carry their denominator. They have DIFFERENT ones -- false
+    # clears over the units that must escalate, false escalates over the units
+    # that should reconcile -- and a bare percentage gives the reader no way to
+    # tell which, or to notice if one quietly changed.
     L.append(f"| False-escalate rate | {_pct(main_metrics['false_escalate_rate'])} "
-             f"({main_metrics['false_escalate_count']}) | "
+             f"({main_metrics['false_escalate_count']}/"
+             f"{main_metrics['should_reconcile_total']}) | "
              f"{_pct(hold_metrics['false_escalate_rate'])} "
-             f"({hold_metrics['false_escalate_count']}) |")
+             f"({hold_metrics['false_escalate_count']}/"
+             f"{hold_metrics['should_reconcile_total']}) |")
     L.append(f"| Match rate | {_pct(main_metrics['match_rate'])} | "
              f"{_pct(hold_metrics['match_rate'])} |")
     L.append(f"| Reason-code accuracy | {_pct(main_metrics['classification_accuracy'])} | "
