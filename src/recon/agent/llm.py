@@ -389,6 +389,15 @@ class GeminiBackend(Backend):
                 # guess went. So: no cap, stated rather than hidden. Gemini's
                 # own default applies. test_gemini_call_uses_arguments_the_sdk
                 # _accepts now checks this call against the installed SDK.
+                #
+                # In SECONDS. The SDK documents this parameter as "the request
+                # timeout for this method in seconds" and multiplies it by 1000
+                # internally; HttpOptions.timeout, by contrast, is milliseconds
+                # and only reaches the async client. Without a timeout here a
+                # stalled call blocks forever: one batch sat for over half an
+                # hour inside _receive_response_headers, having sent a request
+                # that never got an answer, and was killed with nothing written.
+                timeout=GEMINI_TIMEOUT_S,
             )
             u = getattr(r, "usage", None)
             if u:
@@ -477,19 +486,13 @@ def build_client(provider: str | None = None) -> Backend:
                 "the 'google-genai' package is not installed. "
                 "Install it with:  pip install -e '.[gemini]'") from e
         try:
-            # An explicit per-request timeout. Without one the SDK will wait on
-            # a stalled call indefinitely, and a 19-call batch ran for over half
-            # an hour having written nothing and reported nothing -- no output
-            # is produced until the batch ends, so an interrupt loses whatever
-            # quota was already spent.
-            #
-            # MAX_BACKOFF_S in this file already says a reconciliation run that
-            # hangs for ten minutes is its own kind of failure. That capped the
-            # backoff between attempts and left the attempts themselves
-            # uncapped, which is the half that actually hung.
-            return GeminiBackend(genai.Client(
-                http_options=genai.types.HttpOptions(
-                    timeout=int(GEMINI_TIMEOUT_S * 1000))))
+            # The timeout is set per request, at the call site, NOT here.
+            # HttpOptions(timeout=...) reaches only the async client; the
+            # synchronous path this project uses goes through a different SDK
+            # layer and ignores it. Setting it here looked like a fix and was
+            # inert -- the same shape of mistake as accepting max_tokens and
+            # never sending it. See GeminiBackend._attempt.
+            return GeminiBackend(genai.Client())
         except Exception as e:
             raise LLMUnavailable(
                 f"could not construct a Gemini client ({e}).") from e

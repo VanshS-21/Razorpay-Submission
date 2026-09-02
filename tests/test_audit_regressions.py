@@ -650,30 +650,38 @@ def test_gemini_call_uses_arguments_the_sdk_accepts():
         pass          # reached the network or auth layer: the signature is fine
 
 
-def test_the_gemini_client_is_built_with_a_request_timeout():
+def test_the_gemini_call_carries_a_request_timeout():
     """Without one the SDK waits on a stalled call forever.
 
-    A 19-call batch ran for over half an hour, wrote nothing and reported
-    nothing. No output is produced until the batch finishes, so interrupting it
-    loses whatever quota was already spent. MAX_BACKOFF_S in llm.py already says
-    a run that hangs for ten minutes is its own kind of failure; it capped the
-    sleep between attempts and left the attempts uncapped.
+    A 19-call batch sat for over half an hour inside _receive_response_headers,
+    having sent a request that never got an answer, and was killed with nothing
+    written -- no output is produced until the batch ends, so the interrupt lost
+    whatever quota had been spent. MAX_BACKOFF_S already says a run that hangs
+    for ten minutes is its own kind of failure; it capped the sleep BETWEEN
+    attempts and left the attempts uncapped.
+
+    The first fix set HttpOptions(timeout=...) on the client, which reaches only
+    the async client. The synchronous path goes through another SDK layer and
+    ignored it: a fix that looked applied and did nothing. So the timeout is
+    asserted on the arguments the call site actually sends, and the units are
+    asserted too -- this parameter is seconds, while HttpOptions.timeout is
+    milliseconds, and a 1000x error here would read as no timeout at all.
     """
-    genai = pytest.importorskip(
-        "google.genai", reason="google-genai is an optional dependency")
+    pytest.importorskip("google.genai",
+                        reason="google-genai is an optional dependency")
 
-    captured = {}
-    real_client = genai.Client
+    recorder = _RecordingInteractions()
+    backend = llm.GeminiBackend(recorder)
+    with mock.patch.object(llm, "GEMINI_MIN_INTERVAL", 0.0):
+        backend._attempt("gemini-3.7-flash", "sys", "prompt", {"type": "object"},
+                         Usage(model="gemini-3.7-flash"), 4096, last=True)
 
-    def spy(*args, **kwargs):
-        captured.update(kwargs)
-        return real_client(api_key="dummy-key-not-real", **kwargs)
-
-    with mock.patch.dict(os.environ, {"GEMINI_API_KEY": "dummy-key-not-real"}), \
-            mock.patch.object(genai, "Client", spy):
-        llm.build_client("gemini")
-
-    opts = captured.get("http_options")
-    assert opts is not None, "the Gemini client is built with no http_options"
-    assert opts.timeout, "the Gemini client is built with no request timeout"
-    assert opts.timeout == int(llm.GEMINI_TIMEOUT_S * 1000)
+    assert recorder.kwargs is not None
+    assert "timeout" in recorder.kwargs, (
+        "the Gemini call carries no request timeout; a stalled call will block "
+        "the whole batch indefinitely")
+    assert recorder.kwargs["timeout"] == llm.GEMINI_TIMEOUT_S
+    assert 5 <= recorder.kwargs["timeout"] <= 600, (
+        f"timeout={recorder.kwargs['timeout']} is not a plausible number of "
+        f"SECONDS; this SDK parameter is seconds, HttpOptions.timeout is "
+        f"milliseconds, and confusing the two gives no timeout in practice")
