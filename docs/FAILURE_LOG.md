@@ -887,3 +887,51 @@ It is pinned against the published limit now. That is the fifth time in this
 project a test has been written over something it could not observe, and the
 second time in two days that I have done it inside the file whose entire purpose
 is to catch that mistake.
+
+### The failed run was the one worth having
+
+The full batch against 3.7 Flash, at the corrected pacing, on a fresh shell:
+
+```
+1 note of 19 · 11 errors · 8 rate limits · 7 calls never sent · 20.7 minutes
+stopped after 2 consecutive calls exhausted every retry
+```
+
+Read the second line first, because everything today was built for it. The
+circuit breaker tripped and named its reason. `throttled` was counted apart from
+`errors`, so a rate limit does not read as a refusal. `skipped` was counted
+apart from both, so seven calls that were never made are not reported as seven
+model failures. `batch_complete` came back **false**, and `per_n_records`
+therefore refused to print a cost -- a run that produced one note out of
+nineteen has nothing to say about what a batch costs. Every one of those is a
+fix made in the last two days, and this is the first time any of them has fired
+on a real failing run rather than on a stub.
+
+Why 3.7 failed again is still unknown, and the most likely answer is dull: the
+daily quota. The dashboard I read as showing 19 requests remaining was a
+different project's, which came out afterwards, so the account this ran against
+may well have been near its cap before it started. The pacing hypothesis from
+the previous entry is weaker now -- this run paced correctly and still failed --
+but the failure mode was different too, 429s rather than silence, so it is not
+even the same observation. Two unexplained failures on 3.7, one success, and no
+theory that survives contact with all three.
+
+**And then the part that matters.** Diffing the two runs over the same dataset:
+
+```
+settlements where disposition / reason_code / delta differ:    0 of 126
+settlements where the explanation text differs:               19
+false clears, match rate, reason-code accuracy:         identical
+```
+
+The README has claimed since the first week that no verdict moves when the model
+changes. Until tonight that was verified against two scripted stubs -- a wire
+shape I wrote myself, which is close to no evidence at all, and the README said
+so. It is now two live models, and one of them failed 18 of its 19 calls.
+
+That accident is worth more than the clean comparison I was hoping for. Two
+healthy models agreeing proves the prose is stable. One model writing every note
+while the other writes almost none, and the reconciliation coming out
+byte-identical, proves the verdicts do not depend on the model at all -- which is
+the actual claim, and the reason the arithmetic was kept away from the model in
+the first place.

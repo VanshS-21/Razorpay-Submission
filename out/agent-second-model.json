@@ -1,0 +1,38 @@
+{
+  "model": "gemini-3.7-flash",
+  "provider": "gemini",
+  "is_stub": false,
+  "proposals": [],
+  "matches_proposed": 0,
+  "narrations_accepted": 1,
+  "seconds": 1241.047,
+  "exceptions_total": 19,
+  "usage": {
+    "batch_complete": false,
+    "uncapped_by_operator": true,
+    "usd_per_note": 0.004405,
+    "usd_per_call": 0.004405,
+    "model": "gemini-3.7-flash",
+    "calls": 1,
+    "successes": 1,
+    "errors": 11,
+    "skipped": 7,
+    "gave_up": "stopped after 2 consecutive calls exhausted every retry; the remaining calls were not attempted. The quota is most likely spent for the day.",
+    "throttled": 8,
+    "input_tokens": 428,
+    "output_tokens": 216,
+    "thought_tokens": 873,
+    "billable_output_tokens": 1089,
+    "cache_read_tokens": 0,
+    "price_known": true,
+    "usd_total": 0.004405,
+    "inr_total": 0.3876,
+    "per_100_records": {}
+  },
+  "guard": {
+    "checked": 1,
+    "rejected": 0,
+    "rejection_rate": 0.0,
+    "reasons": {}
+  }
+}

@@ -287,10 +287,27 @@ jq '.findings[]|{settlement_id,disposition,reason_code,delta}' out/run.json
 **No disposition, reason code or delta moves.** That is structurally guaranteed:
 `_attach_proposals` writes only `action_required`, `narrate_exceptions` writes
 only `explanation`, `action_required` and `resolved_by`, and no path re-enters
-the classifier. Verified against two backends with different wire shapes; never
-against two live vendors, because only one key was available. Diff the whole file
-and about 38 fields change across 126 findings — those are the prose fields, and
-they are supposed to move.
+the classifier.
+
+It has now been run against **two live models** on the same 126-settlement
+dataset — `gemini-3.5-flash` and `gemini-3.7-flash`
+([`out/agent.json`](out/agent.json),
+[`out/agent-second-model.json`](out/agent-second-model.json)):
+
+```
+settlements where disposition / reason_code / delta differ:    0 of 126
+settlements where the explanation text differs:               19
+false clears, match rate, reason-code accuracy:         identical
+```
+
+The second run is the more useful half, because it **failed**: 1 note out of 19,
+eleven errors, eight rate limits, and seven calls the circuit breaker never
+sent. One model wrote every note, the other wrote almost none, and the
+reconciliation came out byte-identical. A model layer that can fail that badly
+without moving a verdict is the claim, demonstrated rather than asserted.
+
+Still one vendor — Anthropic has never had a key here, so the Anthropic backend
+remains exercised only by the scripted stub.
 
 `--llm-stub` drives the same code path with a scripted client that misbehaves on
 purpose: `honest`, `hallucinating`, `overreaching`, `failing`, `refusing`,
