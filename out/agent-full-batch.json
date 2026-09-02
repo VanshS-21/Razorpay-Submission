@@ -1,0 +1,44 @@
+{
+  "model": "gemini-3.5-flash",
+  "provider": "gemini",
+  "is_stub": false,
+  "proposals": [],
+  "matches_proposed": 0,
+  "narrations_accepted": 2,
+  "seconds": 36.761,
+  "exceptions_total": 3,
+  "usage": {
+    "batch_complete": true,
+    "usd_per_note": 0.012018,
+    "usd_per_call": 0.012018,
+    "model": "gemini-3.5-flash",
+    "calls": 3,
+    "successes": 3,
+    "errors": 0,
+    "skipped": 0,
+    "gave_up": "",
+    "throttled": 0,
+    "input_tokens": 1302,
+    "output_tokens": 557,
+    "thought_tokens": 3232,
+    "billable_output_tokens": 3789,
+    "cache_read_tokens": 0,
+    "price_known": true,
+    "usd_total": 0.036054,
+    "inr_total": 3.1728,
+    "per_100_records": {
+      "usd": 0.144216,
+      "inr": 12.691,
+      "input_tokens": 5208,
+      "output_tokens": 15156
+    }
+  },
+  "guard": {
+    "checked": 3,
+    "rejected": 1,
+    "rejection_rate": 0.3333,
+    "reasons": {
+      "invented_figure:2748.78": 1
+    }
+  }
+}

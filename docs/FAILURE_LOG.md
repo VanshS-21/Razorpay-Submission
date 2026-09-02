@@ -670,3 +670,55 @@ run 2 (1 call)    thinking 88.9% of output tokens, 84.9% of the bill, 6.6x
 
 Both are committed. A finding that reproduces on an independent run is worth
 more than the same finding stated more confidently.
+
+### The guard rejected the truth, again, and only a real model could show it
+
+The first complete batch ever run through the agent layer -- 25 settlements, 3
+exceptions, 3 calls, nothing capped -- came back with **1 of 3 notes rejected**:
+
+```
+guard rejections      1/3 (33.3%)
+    invented_figure:2748.78: 1
+```
+
+My first reading was that the guard had caught a live hallucination, which would
+have been a good result. It had not. Rs 2,748.78 is the order ledger's
+`gross_amount` for `order_U40W9CGY3T0514`, and it appears in the engine's own
+explanation of that settlement:
+
+```
+2 payment line(s) disagree with the order ledger; largest is
+order_U40W9CGY3T0514 booked at Rs 2,154.63 against a ledger value of Rs 2,748.78
+```
+
+`narrate._facts` puts that sentence in the prompt as `deterministic finding:`.
+So the system handed the model the figure and then rejected the note for
+repeating it. `allowed_figures_for` builds its set from settlement lines and
+bank rows; it never included order-ledger values -- in a note about a
+`LEDGER_MISMATCH`, which is the one class of finding that exists *because* of
+the order ledger.
+
+Three things about this are worth keeping.
+
+**No stub could have found it.** The scripted client cites figures out of the
+facts block or an impossible constant. It never quotes a real value from the
+third source, because I wrote it and I did not think of this. Three real calls
+found in thirty-seven seconds what the offline harness could not find in a week.
+
+**It is the same bug as before, for a different reason.** This function's own
+docstring records rejecting `Rs 0.00`, on the assumption that zero is never
+worth citing, when in a ledger mismatch the difference IS zero and saying so is
+the most important sentence in the note. Same failure, different value. The rule
+that covers both is more general than either fix: a figure the engine put in the
+prompt is by construction a figure the engine derived.
+
+**I nearly wrote it up as a success.** The headline said the guard caught an
+invented figure on a live model, which is exactly the story this project would
+like to tell, and the first check I ran seemed to confirm it -- I searched the
+settlement's lines and totals for 2,748.78 and did not find it, because I had not
+searched the order ledger. The number was one query away from being reported as a
+win. What stopped it was checking where the figure came from rather than only
+whether it was in the allowed set.
+
+The guard rejection rate is a published number. A guard that rejects correct
+notes inflates it, and an inflated rejection rate reads as diligence.

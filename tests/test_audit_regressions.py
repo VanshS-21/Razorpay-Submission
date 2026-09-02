@@ -685,3 +685,57 @@ def test_the_gemini_call_carries_a_request_timeout():
         f"timeout={recorder.kwargs['timeout']} is not a plausible number of "
         f"SECONDS; this SDK parameter is seconds, HttpOptions.timeout is "
         f"milliseconds, and confusing the two gives no timeout in practice")
+
+
+# --------------------------------------------------------------------------
+# The guard must not reject a figure the system handed the model
+# --------------------------------------------------------------------------
+
+def test_a_figure_from_the_engines_own_explanation_is_allowed(tmp_path):
+    """Found by the first live run that produced more than two notes.
+
+    narrate._facts puts `deterministic finding: <finding.explanation>` in the
+    prompt. A LEDGER_MISMATCH explanation names the order ledger's gross amount
+    -- the number that class of finding is entirely about. `allowed_figures_for`
+    built its set from settlement lines and bank rows only, so the model quoted
+    a figure the system had just given it and the guard rejected the whole note:
+    1 of 3 rejected, "invented_figure:2748.78", against a real model.
+
+    No stub could find this. The scripted client cites figures from the facts
+    block or an impossible constant, never a real third-source value.
+    """
+    from recon.agent.guard import GuardStats, allowed_figures_for, verify_narration
+
+    d = _dataset(tmp_path, n=24)
+    findings, _m, units, _t, _a = run(d)
+    ledger = [f for f in findings
+              if f.reason_code is AnomalyClass.LEDGER_MISMATCH and f.explanation]
+    if not ledger:
+        pytest.skip("this dataset produced no ledger mismatch")
+
+    for f in ledger:
+        allowed = allowed_figures_for(units[f.settlement_id], f)
+        assert verify_narration(f.explanation, allowed, GuardStats()), (
+            f"the guard rejects the engine's OWN explanation for "
+            f"{f.settlement_id}, which narrate._facts puts in the prompt:\n"
+            f"  {f.explanation}")
+
+
+def test_the_guard_still_rejects_a_figure_from_nowhere(tmp_path):
+    """Widening the allowed set must not blunt the guard.
+
+    The reject path was widened once without re-measuring the accept path
+    (docs/FAILURE_LOG.md, day 7). This is the same check in the other
+    direction.
+    """
+    from recon.agent.guard import GuardStats, allowed_figures_for, verify_narration
+
+    d = _dataset(tmp_path, n=24)
+    findings, _m, units, _t, _a = run(d)
+    f = next(x for x in findings if x.disposition is Disposition.EXCEPTION)
+    allowed = allowed_figures_for(units[f.settlement_id], f)
+
+    stats = GuardStats()
+    assert not verify_narration(
+        "The shortfall of Rs 99,99,999.99 is unexplained.", allowed, stats)
+    assert stats.rejected == 1

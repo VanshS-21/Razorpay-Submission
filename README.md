@@ -61,7 +61,7 @@ offline from a fresh clone and prints clean.
 | Unexplained bank rows | 30, all reported | 0 |
 | Throughput | 1,149 lines; 24k-51k lines/sec across nine runs, see [`eval/metrics.md`](eval/metrics.md) | |
 
-188 tests. No API key or network required for any of them.
+190 tests. No API key or network required for any of them.
 
 **Read the false-clear rate first.** It counts settlements the engine called
 reconciled that the answer key says needed a human. That is the expensive error:
@@ -251,7 +251,7 @@ python demo.py                      # everything, one command
 open out/report.html                # visual report, self-contained and offline
 
 pip install -e ".[dev]"             # adds pytest
-python -m pytest tests/ -q          # 188 tests
+python -m pytest tests/ -q          # 190 tests
 python eval/run_eval.py             # regenerate eval/metrics.md
 python eval/check_claims.py         # verify this README against a live run
 ```
@@ -331,12 +331,45 @@ run 2   410 input · 160 output · 1,280 thinking tokens · $0.013575
   retry with one variable changed had 3.5 Flash answer in seconds while 3.7 hit
   the client timeout, so the default is now the model this project has actually
   got answers from. 3.7 stays available through `--model`.
-- **What a full batch costs is not known.** A batch is 19 calls and the free
-  tier for 3.5 Flash allows 5 a day, so I have not run one. `--narrate-limit`
-  caps the calls, and `per_n_records` refuses to scale a capped batch across
-  126 settlements. Three calls is a sample, and this section quotes no
-  per-batch figure. The same batch reconciles in 0.04 seconds with zero model
-  calls and identical verdicts.
+- **One complete batch has been run, on a smaller dataset.** The 126-settlement
+  batch needs 19 calls and the free tier allows 5 a day. A 25-settlement batch
+  has 3 exceptions, so it fits: every exception narrated, nothing capped,
+  `$0.1442 per 100 records` **measured** rather than extrapolated
+  ([`out/agent-full-batch.json`](out/agent-full-batch.json)). Read it as what it
+  is — that batch has a 12% exception rate against the main set's 15%, so it is
+  a complete measurement of a real batch, not a prediction about a bigger one.
+  For the 126-settlement batch, `per_n_records` still refuses to scale a capped
+  run and this section still quotes no figure.
+- **The guard caught a live model, on the third note it ever checked.** Not the
+  scripted stub — `gemini-3.5-flash`, writing a real exception note, quoting a
+  real ledger value. The whole note was rejected, and the deterministic text
+  stood. See below: the guard was wrong, and finding that out is the reason to
+  run the thing rather than describe it.
+
+The same batch reconciles in 0.04 seconds with zero model calls and identical
+verdicts.
+
+#### What running it actually taught
+
+The rejection above was a **false positive**, and it is the most useful thing
+any model call has produced here.
+
+`narrate._facts` puts the engine's own finding in the prompt: *"largest is
+order_U40W9CGY3T0514 booked at Rs 2,154.63 against a ledger value of
+Rs 2,748.78."* The model quoted that ledger value back, correctly, in a
+`LEDGER_MISMATCH` note — the class of finding that is *entirely about* comparing
+a settlement line to the order ledger. `allowed_figures_for` built its set from
+settlement lines and bank rows and never included order-ledger values, so the
+system handed the model a number and then rejected it for repeating it.
+
+No stub could have found this. The scripted client cites figures from the facts
+block or an impossible constant; it never quotes a real third-source value. The
+guard now allows every figure the engine states in its own explanation, which is
+the general rule that covers this and the earlier version of the same bug, where
+`Rs 0.00` was excluded and the guard rejected the truest sentence in the report.
+
+Both directions are pinned by tests: the engine's own explanation must pass, and
+a figure from nowhere must still be rejected.
 
 Cost is reported only for a model whose price has been read, and only when the
 whole batch ran. An unpriced model prints no figure, because `$0.0000` reads as

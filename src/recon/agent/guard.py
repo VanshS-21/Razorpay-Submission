@@ -190,4 +190,25 @@ def allowed_figures_for(unit, finding) -> set[int]:
     # the settlement ties perfectly is the single most important thing to tell
     # the analyst. Discarding it made the guard reject the truest sentence in
     # the report. Caught by the scripted-client harness; see docs/FAILURE_LOG.md.
+
+    # Every figure the engine states in its OWN text. narrate._facts hands the
+    # model `deterministic finding: <finding.explanation>`, so those numbers are
+    # in the prompt: the system supplies them and then rejected the model for
+    # repeating them.
+    #
+    # A live run found this immediately. A LEDGER_MISMATCH note quoted "a ledger
+    # value of Rs 2,748.78" -- the order ledger's gross_amount, which is what
+    # that entire class of finding is ABOUT, which the engine had printed itself,
+    # and which was absent from this set because the set is built from settlement
+    # lines and bank rows only. The model was right and the guard overruled it.
+    # No stub could have found this: the scripted client cites figures from the
+    # facts block or an impossible constant, never a real third-source value.
+    #
+    # This is the second time this function has rejected the truest sentence in
+    # a note, for the second reason. The rule that covers both: a figure the
+    # engine put in the prompt is by construction one the engine derived.
+    for text in (finding.explanation, finding.action_required):
+        for f in _figures(text or ""):
+            whole, frac = f.split(".")
+            vals.add(int(whole) * 100 + int(frac))
     return vals
