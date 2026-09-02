@@ -16,6 +16,7 @@ reworded so a claim can no longer be found, that is a failure too, not a pass.
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
@@ -101,6 +102,35 @@ def main() -> int:
         ("reason-code accuracy (holdout)", b.split(",")[0],
          pct(holdout["classification_accuracy"])),
     ]
+
+    # The committed model measurement. The README quotes these numbers as the
+    # only live API evidence in the repository, so they are checked against the
+    # file rather than trusted. A stub run once overwrote this file with
+    # fabricated token counts and the result was pushed public; the CLI now
+    # writes stub output under a different name, and this catches it if that
+    # ever stops working.
+    agent_path = ROOT / "out" / "agent.json"
+    if agent_path.exists():
+        agent = json.loads(agent_path.read_text(encoding="utf-8"))
+        u = agent.get("usage", {})
+        if agent.get("is_stub") or "STUB" in str(u.get("model", "")).upper():
+            raise SystemExit(
+                "FAIL: out/agent.json holds SCRIPTED STUB output, not a "
+                "measurement.\n"
+                "      The README cites this file as its only live API "
+                "evidence.\n"
+                "      Restore the real run, or delete the claim.")
+        for label, pattern, actual in (
+            ("model", r"\(`(gemini-[\d.]+-flash)`\)", str(u.get("model"))),
+            ("input tokens", r"([\d,]+) input", str(u.get("input_tokens"))),
+            ("output tokens", r"([\d,]+) output", str(u.get("output_tokens"))),
+            ("thinking tokens", r"([\d,]+) thinking",
+             str(u.get("thought_tokens"))),
+        ):
+            m = re.search(pattern, readme)
+            if m:
+                checks.append((f"agent.json {label}",
+                               m.group(1).replace(",", ""), actual))
 
     # The test count, which drifts every time the suite grows.
     r = subprocess.run([sys.executable, "-m", "pytest", "-q", "--collect-only"],

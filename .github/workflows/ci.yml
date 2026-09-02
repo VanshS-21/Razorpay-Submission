@@ -83,8 +83,9 @@ jobs:
         run: python eval/check_claims.py
       - name: The guard must reject a model that invents a figure
         run: |
-          python -m recon.cli --input data --llm --llm-stub hallucinating --quiet
-          echo "exit $? (0 expected: the guard rejected every note, verdicts unmoved)"
+          python -m recon.cli --input data --out /tmp/stub --llm             --llm-stub hallucinating --quiet
+      - name: A stub run must not have touched the committed measurement
+        run: git diff --exit-code -- out/
 
   agent-layer:
     name: the engine runs with no API key

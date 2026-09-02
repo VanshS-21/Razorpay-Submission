@@ -87,8 +87,15 @@ def main(argv=None):
     write_html(outdir / "report.html", metrics, findings, timing,
                units, agent, dataset=str(datadir), match_result=m)
     if agent:
-        (outdir / "agent.json").write_text(json.dumps(agent, indent=2),
-                                           encoding="utf-8")
+        # A scripted stub must never be able to occupy the file that holds a
+        # measurement. `--llm-stub hallucinating` wrote its fabricated token
+        # counts straight over out/agent.json -- the committed evidence behind
+        # every model number in the README -- and the result was pushed public
+        # before anyone noticed, because the file still parsed and still looked
+        # like a run. Separate names, so the collision cannot happen.
+        name = "agent-stub.json" if agent.get("is_stub") else "agent.json"
+        (outdir / name).write_text(json.dumps(agent, indent=2),
+                                   encoding="utf-8")
     if not a.quiet:
         print(f"\nwrote {outdir / 'run.json'}")
         print(f"wrote {outdir / 'report.html'}   <- open this in a browser")

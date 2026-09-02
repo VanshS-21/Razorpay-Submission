@@ -558,3 +558,35 @@ def test_a_transfer_charge_is_not_counted_against_the_payout(tmp_path):
     assert consolidated, "holdout should resolve consolidated payouts"
     for f in consolidated:
         assert f.disposition is Disposition.RECONCILED
+
+
+# --------------------------------------------------------------------------
+# A stub must never occupy the file that holds a measurement
+# --------------------------------------------------------------------------
+
+def test_a_stub_run_cannot_overwrite_the_committed_measurement(tmp_path):
+    """It did, and the result was pushed to a public repository.
+
+    `--llm-stub hallucinating` wrote its fabricated token counts straight over
+    out/agent.json, which is the only live API evidence this project has and
+    which the README cites by number. Nothing noticed: the file still parsed,
+    still had a model name and a token count, and still looked like a run. The
+    two now have different filenames, so the collision cannot happen.
+    """
+    from recon.cli import main as cli_main
+
+    d = _dataset(tmp_path)
+    out = tmp_path / "out"
+    real = {"usage": {"model": "gemini-3.5-flash", "calls": 2}, "is_stub": False}
+    out.mkdir()
+    (out / "agent.json").write_text(json.dumps(real), encoding="utf-8")
+
+    rc = cli_main(["--input", str(d), "--out", str(out), "--quiet",
+                   "--llm", "--llm-stub", "hallucinating"])
+    assert rc == 0
+
+    after = json.loads((out / "agent.json").read_text(encoding="utf-8"))
+    assert after == real, "a scripted stub overwrote a real measurement"
+    assert (out / "agent-stub.json").exists(), "stub output went nowhere"
+    stub = json.loads((out / "agent-stub.json").read_text(encoding="utf-8"))
+    assert stub["is_stub"] is True
