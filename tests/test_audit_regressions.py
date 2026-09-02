@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import sys
 from unittest import mock
 from pathlib import Path
@@ -647,3 +648,32 @@ def test_gemini_call_uses_arguments_the_sdk_accepts():
             f"passed: {sorted(recorder.kwargs)}")
     except Exception:
         pass          # reached the network or auth layer: the signature is fine
+
+
+def test_the_gemini_client_is_built_with_a_request_timeout():
+    """Without one the SDK waits on a stalled call forever.
+
+    A 19-call batch ran for over half an hour, wrote nothing and reported
+    nothing. No output is produced until the batch finishes, so interrupting it
+    loses whatever quota was already spent. MAX_BACKOFF_S in llm.py already says
+    a run that hangs for ten minutes is its own kind of failure; it capped the
+    sleep between attempts and left the attempts uncapped.
+    """
+    genai = pytest.importorskip(
+        "google.genai", reason="google-genai is an optional dependency")
+
+    captured = {}
+    real_client = genai.Client
+
+    def spy(*args, **kwargs):
+        captured.update(kwargs)
+        return real_client(api_key="dummy-key-not-real", **kwargs)
+
+    with mock.patch.dict(os.environ, {"GEMINI_API_KEY": "dummy-key-not-real"}), \
+            mock.patch.object(genai, "Client", spy):
+        llm.build_client("gemini")
+
+    opts = captured.get("http_options")
+    assert opts is not None, "the Gemini client is built with no http_options"
+    assert opts.timeout, "the Gemini client is built with no request timeout"
+    assert opts.timeout == int(llm.GEMINI_TIMEOUT_S * 1000)

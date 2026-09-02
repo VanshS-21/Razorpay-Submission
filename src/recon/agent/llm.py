@@ -84,6 +84,13 @@ MAX_RETRIES = int(os.environ.get("RECON_LLM_RETRIES", "4"))
 #: A reconciliation run that hangs for ten minutes is its own kind of failure.
 MAX_BACKOFF_S = 45.0
 
+#: Give up on a single request after this long. A reasoning model on a large
+#: schema is genuinely slow -- the measured calls spent more tokens thinking
+#: than answering -- so this is generous. It is not optional: with no timeout at
+#: all the SDK waits forever, and a batch that produces no output until it
+#: finishes then has nothing to show for the quota it spent.
+GEMINI_TIMEOUT_S = float(os.environ.get("RECON_GEMINI_TIMEOUT", "90"))
+
 
 @dataclass
 class Usage:
@@ -470,7 +477,19 @@ def build_client(provider: str | None = None) -> Backend:
                 "the 'google-genai' package is not installed. "
                 "Install it with:  pip install -e '.[gemini]'") from e
         try:
-            return GeminiBackend(genai.Client())
+            # An explicit per-request timeout. Without one the SDK will wait on
+            # a stalled call indefinitely, and a 19-call batch ran for over half
+            # an hour having written nothing and reported nothing -- no output
+            # is produced until the batch ends, so an interrupt loses whatever
+            # quota was already spent.
+            #
+            # MAX_BACKOFF_S in this file already says a reconciliation run that
+            # hangs for ten minutes is its own kind of failure. That capped the
+            # backoff between attempts and left the attempts themselves
+            # uncapped, which is the half that actually hung.
+            return GeminiBackend(genai.Client(
+                http_options=genai.types.HttpOptions(
+                    timeout=int(GEMINI_TIMEOUT_S * 1000))))
         except Exception as e:
             raise LLMUnavailable(
                 f"could not construct a Gemini client ({e}).") from e
