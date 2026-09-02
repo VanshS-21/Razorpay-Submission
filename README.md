@@ -32,7 +32,7 @@ Full results, per-class breakdown, and caveats: [`eval/metrics.md`](eval/metrics
 | Unexplained bank rows | 30, all reported | 0 |
 | Throughput | 1,149 lines — **tens of thousands of lines/sec**; see [`eval/metrics.md`](eval/metrics.md) | |
 
-185 tests. No API key or network required for any of them.
+186 tests. No API key or network required for any of them.
 
 Reason-code accuracy on the holdout counts either of a compound's two real
 defects as correct, because with two defects present there is no single right
@@ -277,7 +277,7 @@ prints clean. Tokens are exported to [`docs/tokens.css`](docs/tokens.css).
 python demo.py                      # everything, one command
 open out/report.html                # visual report (self-contained, offline)
 pip install -e ".[dev]"             # pytest
-python -m pytest tests/ -q          # 185 tests
+python -m pytest tests/ -q          # 186 tests
 python eval/run_eval.py             # regenerate eval/metrics.md
 ```
 
