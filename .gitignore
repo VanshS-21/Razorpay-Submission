@@ -9,3 +9,7 @@ out/
 .scratch/
 .pytest-tmp/
 .hallmark/
+
+# Learning aids, not part of the submission
+look.py
+ping_gemini.py

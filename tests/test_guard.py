@@ -211,6 +211,12 @@ CAUGHT = [
     "the bank is short by Rs&nbsp;5,000.00",
     "the bank is short by Rs 5000",
     "the bank is short by 5000 INR",
+    # Three that leaked past the pattern until an audit enumerated them. The
+    # hex entity is the spelling most HTML actually writes, and the README
+    # claimed entity coverage -- a documented capability that did not exist.
+    "the bank is short by &#x20B9;5,000.00",
+    "the bank is short by INR. 5,000.00",
+    "the bank is short by 5,000/-",
 ]
 
 

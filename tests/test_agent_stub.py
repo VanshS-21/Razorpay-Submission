@@ -92,10 +92,24 @@ def test_hallucinated_figures_are_all_caught(dataset):
         assert bad not in f.action_required
 
 
-def test_overreaching_match_proposals_are_all_rejected(dataset):
-    """The model names a candidate confidently; arithmetic says no."""
-    _, agent, _ = _run(dataset, "overreaching")
+def test_overreaching_match_proposals_are_all_rejected(tmp_path):
+    """The model names a candidate confidently; arithmetic says no.
+
+    This test used to run against the main dataset, where it passed because 30
+    orphan rows were being offered to the model on behalf of settlements that
+    were already reconciled by subset-sum. Fixing that waste left this test with
+    no calls to inspect -- vacuous in exactly the way the audit warned about, and
+    it would have passed forever if the assertion had simply been relaxed.
+
+    So it now builds the input it actually needs: two unmatched settlements with
+    DIFFERENT nets, and a bank credit that matches neither. The row is a genuine
+    orphan, the model names a candidate anyway, and arithmetic must refuse it.
+    """
+    _write_orphan_credit(tmp_path)
+    _, agent, _ = _run(tmp_path, "overreaching")
+    assert agent["guard"]["checked"] > 0, "the resolve path did not run at all"
     assert agent["guard"]["reasons"].get("amount_mismatch", 0) > 0
+    assert agent["matches_proposed"] == 0
 
 
 @pytest.mark.parametrize("scenario", ["honest", "overreaching", "plausible"])
@@ -197,6 +211,44 @@ def _write_ambiguous_pair(d):
         dict(settlement_id="setl_BBB", true_class="true_mismatch",
              expected_disposition="exception", injected_delta=0,
              note="ambiguous", also_acceptable=[]),
+    ]), encoding="utf-8")
+
+
+def _write_orphan_credit(d):
+    """Two unpaid settlements of different sizes; a credit matching neither."""
+    import csv
+    import json
+
+    rows, nets = [], []
+    for sid, utr, oid, pid, amount in (
+            ("setl_AAA", "UTRAAA", "order_a", "pay_a", 120000),
+            ("setl_BBB", "UTRBBB", "order_b", "pay_b", 250000)):
+        fee, tax = amount * 2 // 100, (amount * 2 // 100) * 18 // 100
+        nets.append(amount - fee - tax)
+        rows.append(dict(entity_id=f"trf_{sid}", type="payment", debit=0,
+                         credit=amount - fee - tax, amount=amount,
+                         currency="INR", fee=fee, tax=tax, settlement_id=sid,
+                         settlement_utr=utr, created_at="2026-06-01",
+                         settled_at="2026-06-02", payment_id=pid, order_id=oid,
+                         method="upi", description="Payment"))
+    _csv(d / "settlement_recon.csv", rows)
+    # Deliberately equal to neither net, so nothing can match it deterministically.
+    _csv(d / "bank_statement.csv", [dict(
+        txn_id="btxn_1", value_date="2026-06-02",
+        narration="NEFT CR-RAZORPAY SOFTWARE PVT LTD-REF UNREADABLE",
+        ref_no="", debit=0, credit=nets[0] + nets[1] + 777)])
+    _csv(d / "order_ledger.csv", [
+        dict(order_id="order_a", order_date="2026-06-01", customer_id="c1",
+             gross_amount=120000, currency="INR", status="paid", payment_id="pay_a"),
+        dict(order_id="order_b", order_date="2026-06-01", customer_id="c2",
+             gross_amount=250000, currency="INR", status="paid", payment_id="pay_b")])
+    (d / "ground_truth.json").write_text(json.dumps([
+        dict(settlement_id="setl_AAA", true_class="true_mismatch",
+             expected_disposition="exception", injected_delta=0,
+             note="never credited", also_acceptable=[]),
+        dict(settlement_id="setl_BBB", true_class="true_mismatch",
+             expected_disposition="exception", injected_delta=0,
+             note="never credited", also_acceptable=[]),
     ]), encoding="utf-8")
 
 

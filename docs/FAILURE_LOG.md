@@ -363,3 +363,103 @@ can check out where the engine fails at 33.3%. To reconstruct it: revert
 from the surplus computation in `engine/matcher.py`, then run the holdout. That
 is a fair criticism of how I committed, not of the numbers — they reproduce
 exactly.
+
+---
+
+## Day 6 — adding a second vendor, and what a free tier exposed
+
+I had no Anthropic API key, so the agent layer had never run against a real
+model. Every number about it came from a scripted stub I wrote myself, which is
+the same circularity the main dataset suffers from: I wrote the misbehaviour and
+I wrote the detector. A Gemini key I already had turned that into something
+measurable, so I put both vendors behind one interface and pointed the engine at
+Google instead.
+
+Four things broke. Three of them are mine and only one is interesting for its
+code; the rest are interesting for how they hid.
+
+### Thinking tokens are 87% of the bill and appear nowhere in the reply
+
+The very first call returned 61 input tokens, 60 output tokens -- and 275
+*thought* tokens. Gemini reasons before answering, that reasoning is billed at
+the output rate, and it is not included in `total_output_tokens`.
+
+Written the obvious way, counting `output_tokens` and nothing else, the reported
+cost would have been **5.8x too low**. Across a real 19-call run, thinking was
+87% of everything I paid for. Nothing about a wrong figure there would have
+looked wrong: it is a real number, correctly computed, describing the wrong
+thing.
+
+### 61% of the model calls were spent on questions with no answer
+
+A full run made 49 calls. Nineteen wrote exception notes; the other thirty asked
+the model to identify orphan bank rows on behalf of settlements that had *no
+bank row assigned*.
+
+Six of those settlements were resolved by subset-sum. They are part of a
+consolidated group -- the credit sits against the anchor -- so `assigned[sid]` is
+empty even though they are perfectly matched. `resolve_unmatched` checked only
+`assigned` and never `group`, so it treated all six as unidentified and offered
+the model every orphan row on the statement.
+
+Thirty of forty-nine calls, none of which could ever have succeeded.
+
+On a paid key this is a slightly larger invoice every month and nobody ever
+looks. It was only visible because a free-tier quota of 20 requests per day made
+running the thing impossible, which forced me to ask where the calls were going.
+**The constraint was the diagnostic.** Cutting 49 to 19 also changed the layer
+from unmeasurable to measurable: the free daily allowance is 20.
+
+### Fixing the waste made a test vacuous, and I nearly relaxed it
+
+`test_overreaching_match_proposals_are_all_rejected` asserted that the guard
+rejects unsupported proposals with `amount_mismatch`. With the wasted calls gone
+there were no proposals left on that dataset, so the test failed -- and the
+tempting fix was to soften the assertion.
+
+That is precisely the failure the audit caught me in five days ago: a test whose
+guarded path never executes, passing because nothing can happen. Softening it
+would have preserved the green tick and destroyed the evidence. Instead the test
+now builds the input it actually needs -- two unmatched settlements of different
+sizes and a credit matching neither -- so the model genuinely proposes something
+and arithmetic genuinely refuses it.
+
+Twice now I have written a test that could not fail. The habit I am trying to
+build: after making a test pass, ask whether it *could* have failed.
+
+### A capped run reported a cost 9.5x too low
+
+The free quota meant I could only afford two notes, so I ran with
+`--narrate-limit 2`. The report said **$0.0199 per 100 records**.
+
+The two calls really did cost what they cost. But `per_n_records` divided that
+across all 126 settlements, as though the whole batch had been narrated. Two
+notes of nineteen. The honest figure is **$0.1895 per 100 records** -- 9.5x
+higher.
+
+A taxi meter reading Rs 50 after 2 km, written down as the price of a 20 km
+journey. Wrong in the flattering direction, silently, in the one number an
+operator would actually plan around. `per_n_records` now refuses to extrapolate a
+capped run at all, and reports measured cost *per note* instead.
+
+### What the guard rails did right
+
+Two audit fixes earned their place on first contact with reality. When all 49
+calls failed, the run exited 3 with "every one of the 49 model calls failed"
+rather than printing `$0.0000` and exiting 0 -- which is exactly what it would
+have done a week ago. And `python -m recon.cli` failed with `ModuleNotFoundError`
+until `pip install -e .`, precisely as finding M3 said it would.
+
+### The measurement, stated honestly
+
+Two real narrations, both accepted, **zero guard rejections** -- against a real
+model rather than a stub, for the first time. Two calls is a sample, not a
+measurement, and it is labelled as one.
+
+The operational finding matters more than the cost: a 126-settlement batch needs
+19 model calls, and the free tier allows 20 per day. The same batch reconciles in
+0.04 seconds with **zero** model calls and identical verdicts.
+
+That is the architecture argument made by measurement rather than assertion. The
+model writes prose. The arithmetic decides the money. Swap the vendor, or remove
+it entirely, and not one verdict moves.

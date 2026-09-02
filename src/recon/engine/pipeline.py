@@ -21,7 +21,8 @@ from .matcher import match
 
 
 def run(datadir: Path, use_llm: bool = False, model: str | None = None,
-        narrate_limit: int | None = None, stub: str | None = None):
+        narrate_limit: int | None = None, stub: str | None = None,
+        provider: str | None = None):
     """Reconcile a batch.
 
     Returns (findings, match_result, units, timing, agent_report). `agent_report`
@@ -47,13 +48,20 @@ def run(datadir: Path, use_llm: bool = False, model: str | None = None,
     agent_report = None
     if use_llm or stub:
         agent_report = _run_agent(findings, m, units, order_index,
-                                  model, narrate_limit, stub)
+                                  model, narrate_limit, stub, provider)
         # No re-classification, because nothing the model returned changed the
         # arithmetic. Its identity suggestions are attached to the exceptions
         # they concern, as a lead for the human, and the verdict stands exactly
         # as the deterministic engine left it.
         _attach_proposals(findings, agent_report.get("proposals") or [])
-        agent_report = _finalise_agent_report(agent_report, len(units))
+        # A capped run cannot be extrapolated to a whole batch; see
+        # Usage.per_n_records for what that mistake looked like.
+        n_exceptions = sum(1 for f in findings
+                           if f.disposition.value == "exception")
+        complete = narrate_limit is None or narrate_limit >= n_exceptions
+        agent_report["exceptions_total"] = n_exceptions
+        agent_report = _finalise_agent_report(agent_report, len(units),
+                                              complete=complete)
 
     timing = {
         "load_s": round(t_load, 4),
@@ -91,19 +99,33 @@ def _attach_proposals(findings, proposals):
             ).strip()
 
 
-def _run_agent(findings, m, units, order_index, model, narrate_limit, stub=None):
+def _run_agent(findings, m, units, order_index, model, narrate_limit,
+               stub=None, provider=None):
     from ..agent.guard import GuardStats
-    from ..agent.llm import DEFAULT_MODEL, Usage, build_client
+    from ..agent.llm import (
+        DEFAULT_MODELS,
+        AnthropicBackend,
+        Usage,
+        build_client,
+    )
     from ..agent.narrate import narrate_exceptions
     from ..agent.resolve import resolve_unmatched
 
-    model = model or DEFAULT_MODEL
     if stub:
+        # The scripted client mimics the Anthropic wire shape, so it goes behind
+        # the same backend as the real thing -- the stub exercises the actual
+        # code path rather than a parallel one built for testing.
         from ..agent.fake import ScriptedClient
-        client = ScriptedClient(stub)
+        client = AnthropicBackend(ScriptedClient(stub))
+        # The scripted client borrows the Anthropic wire shape, but no vendor
+        # answered. Printing "provider anthropic" beside SCRIPTED-STUB[...] is
+        # a real-looking value describing something that did not happen.
+        client.provider = f"none (scripted stub, wire shape: anthropic)"
         model = f"SCRIPTED-STUB[{stub}]"   # never mistakable for a real model id
     else:
-        client = build_client()      # raises LLMUnavailable; the CLI reports it
+        # raises LLMUnavailable; the CLI reports it
+        client = build_client(provider)
+        model = model or DEFAULT_MODELS[client.provider]
     usage = Usage(model=model)
     stats = GuardStats()
 
@@ -114,6 +136,7 @@ def _run_agent(findings, m, units, order_index, model, narrate_limit, stub=None)
 
     return {
         "model": model,
+        "provider": client.provider,
         "is_stub": bool(stub),
         "proposals": proposals,
         "matches_proposed": len(proposals),
@@ -125,9 +148,9 @@ def _run_agent(findings, m, units, order_index, model, narrate_limit, stub=None)
     }
 
 
-def _finalise_agent_report(rep, n_records: int) -> dict:
+def _finalise_agent_report(rep, n_records: int, complete: bool = True) -> dict:
     usage, stats = rep.pop("_usage"), rep.pop("_stats")
     rep.pop("_client", None)
-    rep["usage"] = usage.to_dict(n_records)
+    rep["usage"] = usage.to_dict(n_records, complete=complete)
     rep["guard"] = stats.to_dict()
     return rep

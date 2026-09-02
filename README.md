@@ -28,7 +28,7 @@ Full results, per-class breakdown, and caveats: [`eval/metrics.md`](eval/metrics
 | Unexplained bank rows | 30, all reported | 0 |
 | Throughput | 1,149 lines — **tens of thousands of lines/sec**; see [`eval/metrics.md`](eval/metrics.md) | |
 
-125 tests. No API key or network required for any of them.
+135 tests. No API key or network required for any of them.
 
 Reason-code accuracy on the holdout counts either of a compound's two real
 defects as correct, because with two defects present there is no single right
@@ -267,7 +267,8 @@ prints clean. Tokens are exported to [`docs/tokens.css`](docs/tokens.css).
 ```bash
 python demo.py                      # everything, one command
 open out/report.html                # visual report (self-contained, offline)
-python -m pytest tests/ -q          # 125 tests
+pip install -e ".[dev]"             # pytest
+python -m pytest tests/ -q          # 135 tests
 python eval/run_eval.py             # regenerate eval/metrics.md
 ```
 
@@ -289,15 +290,52 @@ and an engine that only reconciles when a network call succeeds is not one a
 finance team can depend on. To enable it:
 
 ```bash
-pip install -e ".[agent]"
-export ANTHROPIC_API_KEY=...
-python -m recon.cli --input data --out out --llm
+pip install -e ".[agent]"     # Anthropic
+pip install -e ".[gemini]"    # or Google
+python -m recon.cli --input data --out out --llm --provider gemini
 ```
 
-> **Not measured against the live API.** No API key was available, so there are
-> no real token counts, latency or cost figures. Rather than estimate them,
-> `eval/metrics.md` records the layer as unmeasured. The command above prints
-> the guard rejection rate and cost per 100 records the moment a key exists.
+### The model is a replaceable part, and that is checkable
+
+Two vendors sit behind one adapter. Everything above it — the prompts,
+`guard.py`, `narrate.py`, `resolve.py` — is written against a single method:
+*here is a system instruction, a prompt and a schema; give me parsed JSON and
+tell me what it cost.* Which company answers lives in `agent/llm.py` and nowhere
+else.
+
+`--provider auto` picks whichever API key is in the environment. Run the batch
+twice against different vendors and diff `run.json`: **not one verdict, reason
+code or delta moves.** That is the central architectural claim, demonstrated
+rather than asserted — and if a verdict ever did move, the architecture would be
+wrong.
+
+### What a real run measured
+
+Measured against **Gemini**, not Claude. No Anthropic key was available, so the
+Anthropic backend has never met a live API — it is exercised only by the scripted
+stub, which is a wire shape I wrote myself, and that circularity is stated here
+rather than hidden.
+
+Three things the real calls taught that no stub could have:
+
+- **Thinking tokens are 87% of the bill and appear nowhere in the reply.**
+  Gemini reasons before answering; that reasoning is billed at the output rate
+  and is *not* included in `total_output_tokens`. Counting only output tokens
+  understated cost by **5.8×**. `Usage.thought_tokens` counts them separately
+  and bills them as output.
+- **A full batch needs 19 model calls; the free tier allows 20 per day.** It only
+  fits because 30 wasted calls were removed (see `docs/FAILURE_LOG.md`). The same
+  batch reconciles in 0.04 seconds with **zero** model calls and identical
+  verdicts. The model is a garnish; the books close without it.
+- **A capped run cannot be extrapolated.** `--narrate-limit 2` paid for two notes
+  and the report divided that across all 126 settlements — $0.0199 per 100
+  records where the real figure was $0.1895, wrong by 9.5× in the flattering
+  direction. `per_n_records` now refuses to scale an incomplete batch and reports
+  measured cost *per note* instead.
+
+Cost is reported only for a model whose price has actually been read, and only
+when the whole batch ran. An unpriced model prints no figure at all, because
+`$0.0000` reads as "free" rather than as "unknown".
 
 What *is* verified offline is the part I am responsible for: that the engine
 behaves correctly when a model misbehaves.
@@ -341,11 +379,17 @@ arose. A sixth scenario, `plausible`, exercises the case directly, and
 two-identical-nets input the shipped data never produces.
 
 ```
-guard rejections      49/49 (100.0%)
-    amount_mismatch: 30
-    invented_figure:9999999.99: 19
+provider              none (scripted stub, wire shape: anthropic)
+model                 SCRIPTED-STUB[hallucinating]
 narration notes       0 accepted
+guard rejections      19/19 (100.0%)
+    invented_figure:9999999.99: 19
 ```
+
+The `amount_mismatch` rejections that used to appear here are gone, and their
+absence is a fix rather than a regression: 30 of those 49 calls were asking the
+model to identify settlements that subset-sum had **already reconciled** — 61% of
+every run spent on questions with no possible answer. See `docs/FAILURE_LOG.md`.
 
 A stubbed run prints a loud banner, reports its model as `SCRIPTED-STUB[...]`,
 and suppresses the cost line — the stub's token figures are fabricated, and a

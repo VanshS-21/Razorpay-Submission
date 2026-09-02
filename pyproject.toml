@@ -13,7 +13,14 @@ license = { file = "LICENSE" }
 dependencies = []
 
 [project.optional-dependencies]
-agent = ["anthropic>=0.40"]
+# The output_config={"format": ...} shape this code uses needs a recent
+# SDK. A resolver landing on 0.40 raises TypeError, which the backend
+# swallows into an error count -- a dependency problem wearing the
+# costume of a model failure.
+agent = ["anthropic>=0.69"]
+# Either vendor satisfies the agent layer; neither is needed for the
+# deterministic engine, which is the product.
+gemini = ["google-genai>=2.0"]
 dev = ["pytest>=8"]
 
 [tool.pytest.ini_options]

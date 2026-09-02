@@ -73,6 +73,9 @@ def score(findings: list[Finding], truth: dict) -> dict:
     must_escalate_total = sum(1 for sid, g in truth.items()
                               if sid in seen
                               and g["expected_disposition"] == "exception")
+    should_reconcile = sum(1 for sid, g in truth.items()
+                           if sid in seen
+                           and g["expected_disposition"] == "reconciled")
     scored = total - len(unscored)
 
     rows = []
@@ -97,7 +100,13 @@ def score(findings: list[Finding], truth: dict) -> dict:
         "false_clear_count": len(false_clear),
         "false_clear_rate": len(false_clear) / must_escalate_total if must_escalate_total else 0.0,
         "false_escalate_count": len(false_escalate),
-        "false_escalate_rate": len(false_escalate) / total if total else 0.0,
+        # Denominator is the units that SHOULD have reconciled -- the
+        # population this error can occur in. Dividing by every settlement was
+        # the flattering choice, in a file whose whole argument is that the
+        # order and honesty of these two rates matters.
+        "false_escalate_rate": (len(false_escalate) / should_reconcile
+                                if should_reconcile else 0.0),
+        "should_reconcile_total": should_reconcile,
         "must_escalate_total": must_escalate_total,
         "per_class": rows,
         "_false_clear": false_clear,

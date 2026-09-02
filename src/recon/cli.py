@@ -22,8 +22,14 @@ def main(argv=None):
     p.add_argument("--llm", action="store_true",
                    help="enable the agent layer (needs ANTHROPIC_API_KEY). "
                         "Off by default: the deterministic engine is the product.")
+    p.add_argument("--provider", default="auto",
+                   choices=["auto", "anthropic", "gemini"],
+                   help="which vendor answers. 'auto' picks whichever API key "
+                        "is in the environment. The verdicts must not depend "
+                        "on this choice -- that is the point of it.")
     p.add_argument("--model", default=None,
-                   help="model id for the agent layer (default: claude-opus-5)")
+                   help="model id for the agent layer "
+                        "(default: per provider, see llm.DEFAULT_MODELS)")
     p.add_argument("--narrate-limit", type=int, default=None,
                    help="cap how many exceptions get an LLM-written note")
     p.add_argument("--llm-stub", default=None, dest="stub",
@@ -44,7 +50,7 @@ def main(argv=None):
     try:
         findings, m, units, timing, agent = run_pipeline(
             datadir, use_llm=a.llm, model=a.model,
-            narrate_limit=a.narrate_limit, stub=a.stub)
+            narrate_limit=a.narrate_limit, stub=a.stub, provider=a.provider)
     except IngestError as e:
         # A bad source file is a user's problem to fix, so it gets a sentence
         # naming the file, the row and the column -- not a stack trace.
@@ -88,10 +94,11 @@ def main(argv=None):
 
     # A run that asked for the model and got nothing from it did not do what it
     # was told, however good the reconciliation underneath was.
-    if a.llm and agent and not agent["usage"]["calls"] and agent["usage"]["errors"]:
-        print(f"error: --llm was requested but every one of the "
-              f"{agent['usage']['errors']} model calls failed; no model output "
-              f"reached this report", file=sys.stderr)
+    if a.llm and agent and not agent["usage"]["successes"] and agent["usage"]["errors"]:
+        print(f"error: --llm was requested but not one of the "
+              f"{agent['usage']['calls'] or agent['usage']['errors']} model "
+              f"calls produced usable output; no model output reached this "
+              f"report", file=sys.stderr)
         return 3
 
     if metrics["false_clear_count"]:
@@ -117,6 +124,7 @@ def _render_agent(a: dict) -> str:
         out.append("  *** figures below are fabricated by the stub and are")
         out.append("  *** NOT a measurement of anything.")
         out.append("-" * w)
+    out.append(f"  provider              {a.get('provider', '?')}")
     out.append(f"  model                 {a['model']}")
     out.append(f"  narration notes       {a['narrations_accepted']} accepted")
     out.append(f"  identity leads        {a['matches_proposed']} proposed "
@@ -126,10 +134,23 @@ def _render_agent(a: dict) -> str:
     if g["reasons"]:
         for why, n in sorted(g["reasons"].items(), key=lambda kv: -kv[1]):
             out.append(f"      {why}: {n}")
+    if u.get("thought_tokens"):
+        out.append(f"  thinking tokens       {u['thought_tokens']:,} "
+                   f"(billed at the output rate; invisible in the reply)")
     per = u.get("per_100_records") or {}
-    # Never print a cost for calls that did not happen. A "$0.0000" derived from
-    # zero successful calls is not a cheap run, it is a broken one.
-    if per and not a.get("is_stub") and u["calls"]:
+    # Never print a cost for calls that did not happen, or for a model whose
+    # price we have not actually read. "$0.0000" reads as "free" rather than as
+    # "unknown", and both are the wrong thing to put beside real token counts.
+    if (not a.get("is_stub") and u["calls"] and u.get("price_known")
+            and not u.get("batch_complete")):
+        out.append(f"  cost per note         ${u['usd_per_call']:.5f} "
+                   f"(measured over {u['calls']} of "
+                   f"{a.get('exceptions_total', '?')} exceptions)")
+        out.append("  cost per 100 records  NOT REPORTED -- this run was capped "
+                   "by --narrate-limit,")
+        out.append("                        so scaling it to a full batch would "
+                   "understate the cost.")
+    if per and not a.get("is_stub") and u["calls"] and u.get("price_known"):
         out.append(f"  cost per 100 records  ${per['usd']:.4f} "
                    f"(~Rs {per['inr']:.2f})")
     if a.get("is_stub"):
@@ -137,6 +158,8 @@ def _render_agent(a: dict) -> str:
     else:
         out.append(f"  tokens                {u['input_tokens']:,} in / "
                    f"{u['output_tokens']:,} out over {u['calls']} calls")
+    if u.get("throttled"):
+        out.append(f"  rate limited          {u['throttled']} (waited and retried)")
     if u["errors"]:
         out.append(f"  api errors            {u['errors']}")
     return "\n".join(out)

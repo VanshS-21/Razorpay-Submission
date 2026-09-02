@@ -173,6 +173,9 @@ def match(units: dict, bank_rows: list) -> MatchResult:
             leftover.remove(chg)
 
     # ---- pass 3: bounded subset-sum ----------------------------------------
+    # Settlements already spent explaining an earlier anchor's surplus.
+    # A payout can only pay for one thing.
+    claimed: set[str] = set()
     # A credit that joined on UTR but exceeds that settlement's net may be a
     # consolidated transfer. Look for unpaid settlements nearby whose nets make
     # up exactly the surplus.
@@ -200,6 +203,14 @@ def match(units: dict, bank_rows: list) -> MatchResult:
             for osid, ou in units.items()
             if osid != sid
             and not res.assigned.get(osid)
+            # A member consumed by an earlier group is NOT available again.
+            # Membership was recorded only in `group`/`method` and never in
+            # `assigned`, so this filter re-offered the same unpaid payout to
+            # every subsequent anchor: two separate over-credits could both be
+            # cleared by citing one settlement once each. The uniqueness check
+            # inside subset_summing_to cannot see it -- it reasons about one
+            # target at a time, and both answers are locally unique.
+            and osid not in claimed
             and _days_apart(anchor_date, ou.lines[0].settled_at) <= DATE_WINDOW_DAYS
             and all(_days_apart(cd, ou.lines[0].settled_at) <= DATE_WINDOW_DAYS
                     for cd in credit_dates)
@@ -207,6 +218,7 @@ def match(units: dict, bank_rows: list) -> MatchResult:
         found = subset_summing_to(surplus, candidates)
         if found:
             members = [sid] + found
+            claimed.update(found)
             for m in members:
                 res.method[m] = "subset_sum"
                 res.group[m] = [x for x in members if x != m]

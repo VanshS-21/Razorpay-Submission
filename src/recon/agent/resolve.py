@@ -86,7 +86,17 @@ def resolve_unmatched(match_result, units: dict, client, model: str,
     the alternative, rather than because a test asserted it on data where the
     path never ran.
     """
-    unmatched = [sid for sid in units if not match_result.assigned.get(sid)]
+    # A settlement resolved by subset-sum has NO bank row of its own -- the
+    # credit sits against the anchor of its group -- but it is matched, and
+    # asking a model to identify it is asking a question that has no answer.
+    # Checking only `assigned` counted all six of them as unidentified, which
+    # sent every orphan bank row to the model: 30 of 49 calls on this dataset,
+    # none of which could ever succeed. Found when a free-tier quota made the
+    # waste visible; on a paid key it would only ever have been a slightly
+    # larger bill.
+    unmatched = [sid for sid in units
+                 if not match_result.assigned.get(sid)
+                 and sid not in match_result.group]
     if not unmatched:
         return []
 

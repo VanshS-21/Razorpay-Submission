@@ -76,10 +76,19 @@ def main():
 
     # -- write --------------------------------------------------------------
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    # The commit these numbers came from -- and whether the tree was dirty.
+    # A bare rev-parse stamped this file with a commit id while eight tracked
+    # files were modified, so the provenance line was false in the one file
+    # whose entire job is provenance. Nobody can reproduce a run from a commit
+    # that does not contain the code that produced it.
     try:
         rev = subprocess.check_output(
             ["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,
             text=True, stderr=subprocess.DEVNULL).strip()
+        if subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT,
+                                   text=True,
+                                   stderr=subprocess.DEVNULL).strip():
+            rev += "-dirty"
     except Exception:
         rev = "unknown"
 
@@ -146,7 +155,7 @@ def main():
     L.append("\n## Adversarial holdout\n")
     L.append("Settlements carrying **two defects at once**. The classifier is "
              "single-label with an ordered rule chain, so compounds sit outside "
-             "its design by construction. Scored on **disposition only** "
+             "its design by construction. Scored primarily on **disposition** "
              "(reconciled vs exception) — with two defects present there is no "
              "single correct reason code.\n")
     L.append("| seed | false clears | false escalates | match rate |")
@@ -177,6 +186,22 @@ def main():
              "invented yet. A genuinely independent number needs compound "
              "families written by someone who has not read `classify.py`.\n")
 
+    L.append("\n## What this file does NOT cover\n")
+    L.append("Every number above comes from the **deterministic engine**. "
+             "`run_eval.py` never invokes the agent layer: no API key, no "
+             "network, nothing that reproduces differently on another machine. "
+             "That is deliberate — these are the numbers the product stands on, "
+             "and they must be checkable by anyone with a clone and an "
+             "interpreter.\n")
+    L.append("The agent layer was measured separately, against **Gemini** — "
+             "never against Claude, because no Anthropic key was available, so "
+             "that backend has met only a scripted stub whose wire shape I "
+             "wrote myself. Those numbers, and the three bugs the real calls "
+             "exposed, are in [`../README.md`](../README.md) and "
+             "[`../docs/FAILURE_LOG.md`](../docs/FAILURE_LOG.md). They are not "
+             "repeated here, because a figure needing a paid key and a "
+             "vendor's uptime to reproduce does not belong beside figures that "
+             "need neither.\n")
     L.append("\n## Known limitations\n")
     L.append("- **Sub-rupee blindness.** Differences of 5 paise or less are "
              "absorbed as fee/GST rounding, so this system cannot detect "

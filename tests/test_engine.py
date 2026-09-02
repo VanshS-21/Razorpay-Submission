@@ -262,10 +262,74 @@ def test_bank_charges_are_recalled_completely(main_run):
     assert row["recall"] == 1.0
 
 
-def test_the_date_window_is_three_days():
-    """Narrowing this to 0 passed every test; it is a published constant."""
+@pytest.mark.parametrize("lag_days,should_match", [(0, True), (3, True),
+                                                   (4, False)])
+def test_the_date_window_admits_three_days_and_not_four(tmp_path, lag_days,
+                                                        should_match):
+    """The window, tested by what it does rather than by what it equals.
+
+    This test used to be `assert DATE_WINDOW_DAYS == 3` and nothing else. An
+    audit neutralised that one line, set the constant to 0, and all 125 tests
+    still passed -- because every fixture's fallback match happened to be
+    same-day, so nothing anywhere exercised the window at all. Restating a
+    constant is not a test of the behaviour it controls.
+
+    A payout with an unusable bank reference must be found by amount and date
+    when the credit lands inside the window, and must NOT be when it lands
+    outside it.
+    """
+    import csv
+    from datetime import date, timedelta
     from recon.engine.arithmetic import DATE_WINDOW_DAYS
-    assert DATE_WINDOW_DAYS == 3
+
+    assert DATE_WINDOW_DAYS == 3, "published constant; behaviour below assumes it"
+
+    settled = date(2026, 6, 2)
+    amount, fee = 100_000, 2_000
+    tax = fee * 18 // 100
+    net = amount - fee - tax
+
+    with (tmp_path / "settlement_recon.csv").open("w", newline="",
+                                                  encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=[
+            "entity_id", "type", "debit", "credit", "amount", "currency",
+            "fee", "tax", "settlement_id", "settlement_utr", "created_at",
+            "settled_at", "payment_id", "order_id", "method", "description"])
+        w.writeheader()
+        w.writerow(dict(entity_id="trf_1", type="payment", debit=0, credit=net,
+                        amount=amount, currency="INR", fee=fee, tax=tax,
+                        settlement_id="setl_LATE", settlement_utr="UTRLATE",
+                        created_at="2026-06-01", settled_at=settled.isoformat(),
+                        payment_id="pay_1", order_id="order_1", method="upi",
+                        description="Payment"))
+
+    # Blank reference, so pass 1 cannot help and only the window decides.
+    with (tmp_path / "bank_statement.csv").open("w", newline="",
+                                                encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=["txn_id", "value_date", "narration",
+                                           "ref_no", "debit", "credit"])
+        w.writeheader()
+        w.writerow(dict(txn_id="btxn_1",
+                        value_date=(settled + timedelta(days=lag_days)).isoformat(),
+                        narration="NEFT CR-XXXX-RAZORPAY SOFTWARE PVT LTD",
+                        ref_no="", debit=0, credit=net))
+
+    with (tmp_path / "order_ledger.csv").open("w", newline="",
+                                              encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=["order_id", "order_date",
+                                           "customer_id", "gross_amount",
+                                           "currency", "status", "payment_id"])
+        w.writeheader()
+        w.writerow(dict(order_id="order_1", order_date="2026-06-01",
+                        customer_id="c1", gross_amount=amount, currency="INR",
+                        status="paid", payment_id="pay_1"))
+
+    findings, m, _, _, _ = run(tmp_path)
+    matched = bool(m.assigned.get("setl_LATE"))
+    assert matched is should_match, (
+        f"credit landing {lag_days} day(s) after settlement: "
+        f"matched={matched}, expected {should_match}")
+    assert (findings[0].disposition is Disposition.RECONCILED) is should_match
 
 
 # --------------------------------------------------------------------------
@@ -353,3 +417,105 @@ def test_a_line_that_does_not_add_up_escalates(tmp_path):
     assert f.disposition is Disposition.EXCEPTION
     assert f.reason_code is AnomalyClass.LEDGER_MISMATCH
     assert "do not add up internally" in f.explanation
+
+
+def test_one_unpaid_payout_cannot_explain_two_over_credits(tmp_path):
+    """A payout can only pay for one thing.
+
+    Subset-sum membership was recorded in `group` and `method` but never in
+    `assigned`, and the candidate filter tested only `assigned`. So a settlement
+    consumed by one anchor's solution stayed on offer to the next, and two
+    unrelated over-credits could both be auto-reconciled by citing the same
+    unpaid payout once each -- producing a group map that contradicted itself
+    (A->[X], B->[X], X->[B]) and clearing real unearned money.
+
+    The uniqueness guard inside subset_summing_to cannot catch this: it reasons
+    about one target at a time, and both answers are locally unique.
+    """
+    import csv
+    rows = []
+
+    def line(sid, utr, amount):
+        fee = amount * 2 // 100
+        tax = fee * 18 // 100
+        rows.append(dict(entity_id=f"trf_{sid}", type="payment", debit=0,
+                         credit=amount - fee - tax, amount=amount,
+                         currency="INR", fee=fee, tax=tax, settlement_id=sid,
+                         settlement_utr=utr, created_at="2026-06-01",
+                         settled_at="2026-06-02", payment_id=f"pay_{sid}",
+                         order_id=f"order_{sid}", method="upi",
+                         description="Payment"))
+        return amount - fee - tax
+
+    n_x = line("setl_X", "UTRX", 100_000)          # genuinely never paid
+    n_a = line("setl_A", "UTRA", 300_000)
+    n_b = line("setl_B", "UTRB", 500_000)
+
+    with (tmp_path / "settlement_recon.csv").open("w", newline="",
+                                                  encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(rows[0]))
+        w.writeheader()
+        w.writerows(rows)
+
+    # A and B are each over-credited by exactly X's net.
+    bank = [dict(txn_id="btxn_A", value_date="2026-06-02",
+                 narration="NEFT CR-RAZORPAY-UTRA", ref_no="UTRA",
+                 debit=0, credit=n_a + n_x),
+            dict(txn_id="btxn_B", value_date="2026-06-02",
+                 narration="NEFT CR-RAZORPAY-UTRB", ref_no="UTRB",
+                 debit=0, credit=n_b + n_x)]
+    with (tmp_path / "bank_statement.csv").open("w", newline="",
+                                                encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(bank[0]))
+        w.writeheader()
+        w.writerows(bank)
+
+    with (tmp_path / "order_ledger.csv").open("w", newline="",
+                                              encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=["order_id", "order_date",
+                                           "customer_id", "gross_amount",
+                                           "currency", "status", "payment_id"])
+        w.writeheader()
+        for sid, amt in (("setl_X", 100_000), ("setl_A", 300_000),
+                         ("setl_B", 500_000)):
+            w.writerow(dict(order_id=f"order_{sid}", order_date="2026-06-01",
+                            customer_id="c", gross_amount=amt, currency="INR",
+                            status="paid", payment_id=f"pay_{sid}"))
+
+    findings, m, _, _, _ = run(tmp_path)
+
+    # X may legitimately belong to ONE group. It must never belong to two.
+    owners = [sid for sid, grp in m.group.items()
+              if sid != "setl_X" and "setl_X" in (grp or [])]
+    assert len(owners) <= 1, (
+        f"setl_X was spent explaining {len(owners)} different over-credits: "
+        f"{owners}. A payout can only pay for one thing.")
+
+    # Whichever anchor lost the race has an unexplained surplus and must escalate.
+    by_sid = {f.settlement_id: f for f in findings}
+    losers = [s for s in ("setl_A", "setl_B") if s not in owners]
+    for sid in losers:
+        assert by_sid[sid].disposition is Disposition.EXCEPTION, (
+            f"{sid} has an over-credit nothing accounts for and was cleared")
+
+    # The group map must agree with itself in both directions.
+    for sid, grp in m.group.items():
+        for other in grp or []:
+            assert sid in (m.group.get(other) or []), (
+                f"group map is self-contradictory: {sid} claims {other}, "
+                f"but {other} claims {m.group.get(other)}")
+
+
+def test_subset_sum_refuses_an_ambiguous_target():
+    """Two different subsets summing to the same credit identify nothing.
+
+    The docstring makes a point of this rule and nothing tested it: deleting the
+    uniqueness check left all 125 tests passing. It is the guard sitting nearest
+    a real money bug, so it gets its own assertion.
+    """
+    # 100 + 200 == 300, and 300 alone == 300. Two answers, so: no answer.
+    assert subset_summing_to(300, [("a", 100), ("b", 200), ("c", 300)]) is None
+    # One answer, returned.
+    assert subset_summing_to(300, [("a", 100), ("b", 200)]) == ["a", "b"]
+    # No answer, returned as such.
+    assert subset_summing_to(300, [("a", 100), ("b", 150)]) is None

@@ -32,9 +32,12 @@ from ..engine.matcher import _days_apart
 #: rupee sign, its HTML entity, and any amount written with the unit trailing.
 #: A guard that only recognises the one spelling its own tests use is not a
 #: guard, and the tests confirmed the implementation rather than the property.
-_SYMBOL = r"(?:Rs\.?|INR|₹)\s*([\d,]+(?:\.\d{1,2})?)"
+_SYMBOL = r"(?:Rs\.?|INR\.?|₹)\s*([\d,]+(?:\.\d{1,2})?)"
 _TRAILING = r"\b([\d,]+(?:\.\d{1,2})?)\s*(?:rupees?|rs\.?|inr)\b"
-_MONEY = re.compile(f"{_SYMBOL}|{_TRAILING}", re.I)
+#: "5,000/-" -- the Indian invoice suffix. Carries no currency word at all, so
+#: neither pattern above sees it.
+_SUFFIX = r"\b([\d,]+(?:\.\d{1,2})?)\s*/-"
+_MONEY = re.compile(f"{_SYMBOL}|{_TRAILING}|{_SUFFIX}", re.I)
 
 #: Written before scanning, so an entity or a non-breaking space cannot smuggle
 #: a figure past the pattern.
@@ -45,9 +48,16 @@ _ENTITIES = {
 
 
 def _normalise(text: str) -> str:
+    """Fold entities and odd spaces down before the pattern ever sees them.
+
+    This used to be a case-sensitive str.replace over a dict whose only hex
+    entity was lower case, so `&#x20B9;` -- the spelling most HTML writes --
+    walked straight through. The README explicitly claims entity coverage,
+    which made it a documented capability that did not exist.
+    """
     out = text or ""
     for k, v in _ENTITIES.items():
-        out = out.replace(k, v)
+        out = re.sub(re.escape(k), v, out, flags=re.I)
     return out
 
 

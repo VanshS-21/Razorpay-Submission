@@ -151,6 +151,9 @@ p{margin:0 0 var(--space-sm)}
   border:var(--rule-hair) solid currentColor;vertical-align:middle}
 .mark--pass{color:var(--color-ink-2)}
 .mark--fail{color:var(--color-signal)}
+.note--warn{border:1px solid var(--color-signal);padding:12px 14px;
+ margin:14px 0 0;font-size:13px;line-height:1.5;color:var(--color-ink)}
+.note--warn b{color:var(--color-signal)}
 .lead-note{color:var(--color-muted);font-size:var(--text-sm);
   margin:var(--space-sm) 0 0;max-width:70ch}
 
@@ -249,12 +252,26 @@ def _pct(x, dash="&mdash;"):
 
 
 def _rev() -> str:
+    """The commit these numbers came from -- and whether the tree was dirty.
+
+    A bare `rev-parse HEAD` stamped `eval/metrics.md` with a commit id while
+    eight tracked files were modified, so the provenance line was false in the
+    one file whose entire job is provenance. A reader cannot reproduce a run
+    from a commit that does not contain the code that produced it.
+    """
     try:
-        return subprocess.check_output(
+        rev = subprocess.check_output(
             ["git", "rev-parse", "--short", "HEAD"],
             text=True, stderr=subprocess.DEVNULL).strip()
     except Exception:
         return "unknown"
+    try:
+        dirty = subprocess.check_output(
+            ["git", "status", "--porcelain"],
+            text=True, stderr=subprocess.DEVNULL).strip()
+    except Exception:
+        return rev
+    return f"{rev}-dirty" if dirty else rev
 
 
 #: Reason codes whose defining feature is that every total balances. Called out
@@ -267,7 +284,17 @@ def render_html(metrics: dict, findings: list, timing: dict,
                 units: dict | None = None, agent: dict | None = None,
                 dataset: str = "data", match_result=None) -> str:
     fc = metrics["false_clear_count"]
-    passed = fc == 0
+
+    # A green chip has to mean "everything was checked and everything was fine."
+    # This used to be `fc == 0` alone, so a run over data the key said nothing
+    # about -- or over no data at all -- rendered "pass, 0.0%" on the page.
+    # The console printed a loud warning and the CLI exited 4; the HTML, which
+    # is the artefact anyone actually opens and whose whole stated purpose is
+    # that the safety figure is read first, quietly dropped the caveat.
+    unscored = metrics.get("unscored") or []
+    unmatched_key = metrics.get("unmatched_key") or []
+    incomplete = bool(unscored or unmatched_key or not metrics.get("scored"))
+    passed = fc == 0 and not incomplete
     exceptions = sorted(
         (f for f in findings if f.disposition is Disposition.EXCEPTION),
         key=lambda f: (-abs(f.delta), f.settlement_id))
@@ -301,6 +328,22 @@ def render_html(metrics: dict, findings: list, timing: dict,
       f"<small>{fc} of {metrics['must_escalate_total']} settlements that "
       f"required a human were auto-reconciled</small></div>"
       f'<div class="row-v">{_pct(metrics["false_clear_rate"])}</div></div>')
+
+    if incomplete:
+        A('<div class="note note--warn"><b>This rate does not cover every '
+          'settlement.</b><br>')
+        if not metrics.get("scored"):
+            A("Nothing was scored at all. A rate of 0.0% over zero units is "
+              "not a result.<br>")
+        if unscored:
+            A(f"{len(unscored)} settlement(s) are absent from the answer key "
+              f"and were not scored: "
+              f'{_e(", ".join(unscored[:6]))}'
+              f'{" and more" if len(unscored) > 6 else ""}.<br>')
+        if unmatched_key:
+            A(f"{len(unmatched_key)} key entr(ies) produced no finding at all "
+              f"-- the engine never saw them.<br>")
+        A("</div>")
     for k, sub, v in [
         ("Match rate", f"{reconciled} of {total} auto-reconciled",
          _pct(metrics["match_rate"])),

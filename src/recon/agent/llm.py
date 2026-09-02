@@ -1,33 +1,82 @@
-"""Anthropic client wiring, model config, and cost accounting.
+"""Model access, cost accounting, and the vendor boundary.
 
 The agent layer is optional by design. The deterministic engine is the product;
-this is an enhancement on top of it, and the pipeline runs to completion with
-`--no-llm` (the default) on a machine with no API key and no `anthropic`
-package installed. That is not a convenience -- an engine that only reconciles
-when a network call succeeds is not one a finance team can depend on.
+this is an enhancement on top of it, and the pipeline runs to completion with no
+API key and no SDK installed. That is not a convenience -- an engine that only
+reconciles when a network call succeeds is not one a finance team can depend on.
+
+THE VENDOR BOUNDARY
+-------------------
+Everything above this file -- narrate.py, resolve.py, guard.py -- is written
+against a single method: *"here is a system instruction, a prompt and a schema;
+give me back parsed JSON, and tell me what it cost."* Which company answers is a
+detail that lives in this file and nowhere else.
+
+That is what turns "the model is a replaceable part" from a claim into something
+checkable: run the same reconciliation against two vendors and diff the
+verdicts. If a verdict moves, the architecture was wrong.
 """
 
 from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass, field
+import re
+import time
+from dataclasses import dataclass
 
-#: USD per million tokens, from the Anthropic pricing table.
+#: USD per million tokens.
+#:
+#: Anthropic's numbers are from its pricing table. Google's are from
+#: ai.google.dev/gemini-api/docs/pricing, where the output column is labelled
+#: "Output price (including thinking tokens)" -- see Usage.thought_tokens below
+#: for why that phrase matters more than it looks.
+#:
+#: Only models whose prices have actually been read are listed. Guessing a price
+#: would put an invented number exactly where a measured one belongs.
 PRICING = {
-    "claude-opus-5":   {"in": 5.00, "out": 25.00},
-    "claude-sonnet-5": {"in": 2.00, "out": 10.00},
+    "claude-opus-5":    {"in": 5.00, "out": 25.00},
+    "claude-sonnet-5":  {"in": 2.00, "out": 10.00},
     "claude-haiku-4-5": {"in": 1.00, "out": 5.00},
+    # Gemini 3.7 Flash is promotional until 31 Dec 2026; it doubles on 1 Jan.
+    "gemini-3.7-flash": {"in": 0.75, "out": 3.75},
+    "gemini-3.5-flash": {"in": 1.50, "out": 9.00},
 }
 
-#: Default model. Opus 5 is the default deliberately: the model is being asked
-#: to describe money to a human who will act on the description, and choosing a
-#: cheaper model is a cost/quality tradeoff for the operator to make explicitly
-#: via --model, not one to bury in a constant. Measured cost per 100 records is
-#: reported either way.
-DEFAULT_MODEL = "claude-opus-5"
+#: Default model per vendor.
+#:
+#: Opus 5 for Anthropic deliberately: the model is describing money to a human
+#: who will act on the description, so trading quality for price is the
+#: operator's call to make explicitly via --model, not one to bury in a
+#: constant. Gemini 3.7 Flash because it is both newer and half the price of
+#: 3.5 Flash. Measured cost per 100 records is reported either way.
+DEFAULT_MODELS = {
+    "anthropic": "claude-opus-5",
+    "gemini":    "gemini-3.7-flash",
+}
+
+#: Which environment variable proves each vendor is usable.
+API_KEY_VARS = {
+    "anthropic": ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"),
+    "gemini":    ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+}
 
 USD_TO_INR = 88.0
+
+#: Seconds to wait between Gemini calls. Free-tier keys are rate limited per
+#: minute, and a full run makes ~50 calls; without pacing most of them come back
+#: as 429s, which this module would dutifully swallow into "0 notes accepted"
+#: and report as though the model had simply declined to help.
+GEMINI_MIN_INTERVAL = float(os.environ.get("RECON_GEMINI_INTERVAL", "3.5"))
+
+#: How many times to wait and try again when the API says "not yet".
+#: A 429 is not a refusal, it is a request to slow down, and counting it as an
+#: error made a throttled run indistinguishable from a broken one.
+MAX_RETRIES = int(os.environ.get("RECON_LLM_RETRIES", "4"))
+
+#: Never sleep longer than this on one retry, however long the API asks for.
+#: A reconciliation run that hangs for ten minutes is its own kind of failure.
+MAX_BACKOFF_S = 45.0
 
 
 @dataclass
@@ -35,49 +84,98 @@ class Usage:
     """Token and cost accounting across a run."""
 
     calls: int = 0
+    #: Calls that came back with usable parsed JSON.
+    #:
+    #: `calls` counts attempts, because the tokens are spent either way and
+    #: pretending otherwise would understate the bill. But the loud-failure gate
+    #: used `calls` as a proxy for success, so it could only ever fire when the
+    #: SDK raised. A refusal, a truncated reply or a non-completed status all
+    #: recorded a call, left the gate shut, and printed a real dollar figure
+    #: beside "0 notes accepted" on the way to exit 0 -- three of the four
+    #: realistic failure shapes.
+    successes: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
     cache_read_tokens: int = 0
+    #: Calls that were rate limited and retried. Reported separately from
+    #: errors: being throttled says something about the plan, being refused
+    #: says something about the request, and one must not read as the other.
+    throttled: int = 0
+    #: Reasoning tokens the model generated but did not return.
+    #:
+    #: Invisible in the reply and absent from output_tokens, but billed at the
+    #: output rate. The first real Gemini call made here returned 61 in, 60 out
+    #: and 275 thought -- so counting only output_tokens would have understated
+    #: the run roughly fivefold, and the wrong figure would have looked entirely
+    #: reasonable sitting in the report. Counted separately, billed as output.
+    thought_tokens: int = 0
     errors: int = 0
-    model: str = DEFAULT_MODEL
+    model: str = ""
 
-    def add(self, resp):
+    def record(self, *, inp: int = 0, out: int = 0, cached: int = 0,
+               thought: int = 0):
+        """One successful call. Backends report their own numbers."""
         self.calls += 1
-        u = getattr(resp, "usage", None)
-        if u is None:
-            return
-        self.input_tokens += getattr(u, "input_tokens", 0) or 0
-        self.output_tokens += getattr(u, "output_tokens", 0) or 0
-        self.cache_read_tokens += getattr(u, "cache_read_input_tokens", 0) or 0
+        self.input_tokens += inp or 0
+        self.output_tokens += out or 0
+        self.cache_read_tokens += cached or 0
+        self.thought_tokens += thought or 0
+
+    @property
+    def billable_output(self) -> int:
+        return self.output_tokens + self.thought_tokens
 
     @property
     def usd(self) -> float:
-        p = PRICING.get(self.model, PRICING[DEFAULT_MODEL])
+        p = PRICING.get(self.model)
+        if p is None:
+            # An unknown model has no price. Returning 0.0 would print "$0.0000"
+            # next to real token counts, which reads as "free" rather than as
+            # "unknown" -- so the caller checks for None and prints neither.
+            return None
         return (self.input_tokens / 1e6 * p["in"]
-                + self.output_tokens / 1e6 * p["out"])
+                + self.billable_output / 1e6 * p["out"])
 
-    def per_n_records(self, n: int, per: int = 100) -> dict:
-        if not n:
+    def per_n_records(self, n: int, per: int = 100, complete: bool = True) -> dict:
+        """Cost scaled to `per` records -- only when the batch was fully processed.
+
+        A capped run (--narrate-limit) pays for a few notes and this used to
+        divide that cost across every settlement, as though the whole batch had
+        been done. Two notes out of nineteen reported $0.0199 per 100 records
+        when the real figure was $0.1895: a genuine measurement, correctly
+        computed, wearing a label that did not describe it -- and wrong in the
+        flattering direction, which is the worst way to be wrong about cost.
+        """
+        if not n or self.usd is None or not complete or not self.successes:
             return {}
         scale = per / n
         return {
             "usd": round(self.usd * scale, 6),
             "inr": round(self.usd * USD_TO_INR * scale, 4),
             "input_tokens": round(self.input_tokens * scale),
-            "output_tokens": round(self.output_tokens * scale),
+            "output_tokens": round(self.billable_output * scale),
         }
 
-    def to_dict(self, n_records: int = 0) -> dict:
+    def to_dict(self, n_records: int = 0, complete: bool = True) -> dict:
+        usd = self.usd
         return {
+            "batch_complete": complete,
+            "usd_per_call": None if usd is None or not self.calls
+                            else round(usd / self.calls, 6),
             "model": self.model,
             "calls": self.calls,
+            "successes": self.successes,
             "errors": self.errors,
+            "throttled": self.throttled,
             "input_tokens": self.input_tokens,
             "output_tokens": self.output_tokens,
+            "thought_tokens": self.thought_tokens,
+            "billable_output_tokens": self.billable_output,
             "cache_read_tokens": self.cache_read_tokens,
-            "usd_total": round(self.usd, 6),
-            "inr_total": round(self.usd * USD_TO_INR, 4),
-            "per_100_records": self.per_n_records(n_records),
+            "price_known": usd is not None,
+            "usd_total": None if usd is None else round(usd, 6),
+            "inr_total": None if usd is None else round(usd * USD_TO_INR, 4),
+            "per_100_records": self.per_n_records(n_records, complete=complete),
         }
 
 
@@ -85,58 +183,267 @@ class LLMUnavailable(RuntimeError):
     """Raised when the agent layer is requested but cannot run."""
 
 
-def build_client():
-    """Return an Anthropic client, or raise LLMUnavailable with a clear reason."""
-    try:
-        import anthropic
-    except ImportError as e:
-        raise LLMUnavailable(
-            "the 'anthropic' package is not installed. "
-            "Install it with:  pip install -e '.[agent]'") from e
+# --------------------------------------------------------------------------
+# Backends -- one per vendor, one method each
+# --------------------------------------------------------------------------
 
-    # The SDK does NOT raise when there is no key: it stores api_key=None and
-    # fails per-request, which structured_call swallows into None by design. The
-    # result was a run that printed a real model id, zero tokens, "$0.0000 per
-    # 100 records" and exited 0 -- a fabricated cost figure sitting exactly
-    # where a measured one goes. Checked here so the failure is loud and early.
-    if not (os.environ.get("ANTHROPIC_API_KEY")
-            or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
-        raise LLMUnavailable(
-            "no ANTHROPIC_API_KEY in the environment. The agent layer is "
-            "optional; the deterministic engine is the product and runs "
-            "without it. To exercise the agent code path offline instead, "
-            "use --llm-stub.")
+def _retry_after(exc) -> float | None:
+    """Seconds to wait, if this exception is a rate limit. None if it is not.
 
-    try:
-        return anthropic.Anthropic()
-    except Exception as e:
-        raise LLMUnavailable(
-            f"could not construct an Anthropic client ({e}). Set ANTHROPIC_API_KEY "
-            "or run 'ant auth login'.") from e
-
-
-def structured_call(client, model: str, system: str, prompt: str,
-                    schema: dict, usage: Usage, max_tokens: int = 1024):
-    """One structured-output call. Returns a parsed dict, or None on failure.
-
-    Errors are swallowed into None on purpose. A failed narration call must
-    degrade to the deterministic explanation, never take down a reconciliation
-    run -- the books still have to close if the API is having a bad afternoon.
+    The API states its own delay ("Please retry in 23.85s"), which is better
+    information than any backoff schedule we could invent, so it is used when
+    present and a doubling fallback when it is not.
     """
-    try:
-        resp = client.messages.create(
-            model=model,
-            max_tokens=max_tokens,
-            system=system,
-            messages=[{"role": "user", "content": prompt}],
-            output_config={"format": {"type": "json_schema", "schema": schema}},
-        )
-        usage.add(resp)
-        if getattr(resp, "stop_reason", None) == "refusal":
+    text = f"{type(exc).__name__} {exc}"
+    if "429" not in text and "RateLimit" not in text and "too_many_requests" not in text:
+        return None
+    m = re.search(r"retry in ([\d.]+)s", text)
+    if m:
+        return min(float(m.group(1)) + 0.5, MAX_BACKOFF_S)
+    return None
+
+
+def _debug(exc):
+    """Show a swallowed error when asked.
+
+    Errors are swallowed on purpose so a bad afternoon at some API cannot stop
+    the books closing -- but "49 errors" with no way to see even one of them is
+    not diagnosable. Set RECON_LLM_DEBUG=1 to print them.
+    """
+    if os.environ.get("RECON_LLM_DEBUG"):
+        import sys
+        import traceback
+        print(f"[llm] {type(exc).__name__}: {exc}", file=sys.stderr)
+        if os.environ.get("RECON_LLM_DEBUG") == "2":
+            traceback.print_exc()
+
+
+#: Sentinel meaning "the API asked us to wait" -- distinct from None, which
+#: means the call genuinely failed and the deterministic text stands.
+_RETRY = object()
+
+
+class Backend:
+    """A vendor behind one method.
+
+    Subclasses return a parsed dict, or None if anything at all went wrong.
+    They never raise: a failed narration call must degrade to the deterministic
+    explanation, never take down a reconciliation run. The books still have to
+    close if somebody's API is having a bad afternoon.
+    """
+
+    provider = "?"
+
+    def complete(self, model, system, prompt, schema, max_tokens, usage):
+        raise NotImplementedError
+
+
+class AnthropicBackend(Backend):
+    provider = "anthropic"
+
+    def __init__(self, client):
+        self.client = client
+
+    def complete(self, model, system, prompt, schema, max_tokens, usage):
+        try:
+            resp = self.client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                system=system,
+                messages=[{"role": "user", "content": prompt}],
+                output_config={"format": {"type": "json_schema",
+                                          "schema": schema}},
+            )
+            u = getattr(resp, "usage", None)
+            usage.record(
+                inp=getattr(u, "input_tokens", 0) if u else 0,
+                out=getattr(u, "output_tokens", 0) if u else 0,
+                cached=getattr(u, "cache_read_input_tokens", 0) if u else 0,
+            )
+            stop = getattr(resp, "stop_reason", None)
+            if stop in ("refusal", "max_tokens"):
+                usage.errors += 1
+                _debug(RuntimeError(f"stop_reason={stop}"))
+                return None
+            text = next((b.text for b in resp.content if b.type == "text"), None)
+            return json.loads(text) if text else None
+        except Exception as e:
+            usage.errors += 1
+            _debug(e)
+            return None
+
+
+class GeminiBackend(Backend):
+    provider = "gemini"
+
+    def __init__(self, client):
+        self.client = client
+        self._last_call = 0.0
+        #: Consecutive calls that exhausted every retry and were still rate
+        #: limited. Once the quota is gone it stays gone, and continuing to ask
+        #: only converts a fast failure into a slow one.
+        self._exhausted = 0
+        self._gave_up = False
+
+    def complete(self, model, system, prompt, schema, max_tokens, usage):
+        # Circuit breaker. Retrying is right for a transient limit and wrong for
+        # an exhausted daily quota, and the two look identical from here. With
+        # 4 retries sleeping up to 45s each, a 19-call run against a spent quota
+        # took the better part of an hour to report that it had done nothing --
+        # silently, because the errors are swallowed by design. Two calls that
+        # burn all their retries is enough evidence to stop asking.
+        if self._gave_up:
             usage.errors += 1
             return None
-        text = next((b.text for b in resp.content if b.type == "text"), None)
-        return json.loads(text) if text else None
-    except Exception:
-        usage.errors += 1
+
+        for attempt in range(MAX_RETRIES + 1):
+            out = self._attempt(model, system, prompt, schema, usage,
+                                last=attempt == MAX_RETRIES)
+            if out is not _RETRY:
+                if out is not None:
+                    self._exhausted = 0
+                return out
+
+        self._exhausted += 1
+        if self._exhausted >= 2:
+            self._gave_up = True
+            _debug(RuntimeError(
+                "rate limited on every retry twice in a row -- giving up on "
+                "the remaining calls rather than grinding through backoff. "
+                "The quota is most likely spent for the day."))
         return None
+
+    def _attempt(self, model, system, prompt, schema, usage, last):
+        # Free-tier pacing, so most calls never hit the limit in the first
+        # place. The retry above is the safety net, not the strategy.
+        wait = GEMINI_MIN_INTERVAL - (time.monotonic() - self._last_call)
+        if wait > 0:
+            time.sleep(wait)
+        self._last_call = time.monotonic()
+
+        try:
+            r = self.client.interactions.create(
+                model=model,
+                input=prompt,
+                system_instruction=system,
+                response_format={
+                    "type": "text",
+                    "mime_type": "application/json",
+                    "schema": schema,
+                },
+            )
+            u = getattr(r, "usage", None)
+            if u:
+                usage.record(
+                    inp=u.total_input_tokens,
+                    out=u.total_output_tokens,
+                    cached=u.total_cached_tokens,
+                    thought=u.total_thought_tokens,
+                )
+            else:
+                usage.record()
+
+            if r.status != "completed":
+                usage.errors += 1
+                return None
+            return json.loads(r.output_text) if r.output_text else None
+        except Exception as e:
+            delay = _retry_after(e)
+            if delay is not None and last:
+                # Out of retries and still limited: let complete() count it.
+                usage.errors += 1
+                _debug(e)
+                return _RETRY
+            if delay is not None:
+                # Told to wait, not told no. Waiting is the correct response.
+                usage.throttled += 1
+                _debug(e)
+                time.sleep(delay)
+                return _RETRY
+            usage.errors += 1
+            _debug(e)
+            return None
+
+
+# --------------------------------------------------------------------------
+# Construction
+# --------------------------------------------------------------------------
+
+def resolve_provider(requested: str | None) -> str:
+    """Which vendor to use. 'auto' picks whichever key is present."""
+    if requested and requested != "auto":
+        return requested
+    for name, keys in API_KEY_VARS.items():
+        if any(os.environ.get(k) for k in keys):
+            return name
+    raise LLMUnavailable(
+        "no model API key in the environment. Set ANTHROPIC_API_KEY or "
+        "GEMINI_API_KEY. The agent layer is optional -- the deterministic "
+        "engine is the product and runs without it. To exercise the agent "
+        "code path offline instead, use --llm-stub.")
+
+
+def build_client(provider: str | None = None) -> Backend:
+    """Return a Backend, or raise LLMUnavailable with a reason a human can act on."""
+    provider = resolve_provider(provider)
+
+    # Neither SDK raises when there is no key: both store it as None and fail
+    # per request, which complete() swallows into None by design. The result was
+    # a run printing a real model id, zero tokens, "$0.0000 per 100 records" and
+    # exit 0 -- a fabricated cost figure sitting exactly where a measured one
+    # goes. Checked here so the failure is loud and early.
+    keys = API_KEY_VARS[provider]
+    if not any(os.environ.get(k) for k in keys):
+        raise LLMUnavailable(
+            f"--provider {provider} was requested but none of "
+            f"{' / '.join(keys)} is set in the environment.")
+
+    if provider == "anthropic":
+        try:
+            import anthropic
+        except ImportError as e:
+            raise LLMUnavailable(
+                "the 'anthropic' package is not installed. "
+                "Install it with:  pip install -e '.[agent]'") from e
+        try:
+            return AnthropicBackend(anthropic.Anthropic())
+        except Exception as e:
+            raise LLMUnavailable(
+                f"could not construct an Anthropic client ({e}).") from e
+
+    if provider == "gemini":
+        try:
+            from google import genai
+        except ImportError as e:
+            raise LLMUnavailable(
+                "the 'google-genai' package is not installed. "
+                "Install it with:  pip install -e '.[gemini]'") from e
+        try:
+            return GeminiBackend(genai.Client())
+        except Exception as e:
+            raise LLMUnavailable(
+                f"could not construct a Gemini client ({e}).") from e
+
+    raise LLMUnavailable(f"unknown provider {provider!r}")
+
+
+def structured_call(backend, model: str, system: str, prompt: str,
+                    schema: dict, usage: Usage, max_tokens: int = 4096):
+    """One structured-output call. Returns a parsed dict, or None on failure.
+
+    This function no longer knows which vendor it is talking to, and that is the
+    entire point of it.
+
+    Success is counted here, in one place, rather than in each backend: a call
+    succeeded exactly when it produced something the caller can use.
+
+    max_tokens was 1024, which has to hold an exception note AND whatever
+    reasoning the model does first. Thinking is on by default on the Anthropic
+    default model, and measured Gemini runs spent 87% of their output budget on
+    it -- so a truncated reply was the likely shape of failure on a path that
+    has never been exercised against a live key.
+    """
+    out = backend.complete(model, system, prompt, schema, max_tokens, usage)
+    if out is not None:
+        usage.successes += 1
+    return out
