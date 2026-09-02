@@ -824,3 +824,38 @@ expose it.
 
 Every one of those four is a fix made in the last two days, and none of them
 could have been verified without running the thing.
+
+### 3.7 Flash answered in 25 seconds, and my explanation was wrong
+
+The test that could not be run earlier -- one call at a 300-second ceiling, to
+separate "slow" from "not answering" -- finally ran on a fresh quota. It did not
+need 300 seconds. It took **25.5 seconds**, well inside the 90-second ceiling
+that eighteen earlier requests had blown through, and produced a clean note:
+462 input, 205 output, 780 thinking tokens, $0.00404. That is about 3.4x cheaper
+per note than 3.5 Flash and 40% fewer thinking tokens.
+
+So the "3.7 Flash is slow" hypothesis is dead, and I had written it into the
+README, the log and a module docstring as though it were established. It was the
+obvious reading of eighteen timeouts, and it was wrong.
+
+What actually explains those eighteen requests is **unknown**. Three things
+differed between the failing attempts and the successful one: the key, the
+elapsed time, and the pacing -- 3.5 seconds between requests during the
+failures, which is 17 a minute against a limit of 5, and 12.5 seconds during the
+success. The pacing is the interesting one, and I am recording it as a
+hypothesis rather than an answer, because exceeding a per-minute limit is
+supposed to produce a 429 and not silence. Testing it means deliberately
+re-running at 3.5s to see whether the hangs come back, which is worth doing when
+there is quota to spare and is not worth doing tonight.
+
+The default stays 3.5 Flash, and the reason has changed. It was "3.7 has never
+answered". It is now "3.5 has 25 calls across four runs with no failures, and
+3.7 has one success and eighteen unexplained timeouts". That is a judgement
+about the evidence available, not about the models, and it is the sort of
+sentence that should be re-examined the moment there is more evidence.
+
+The lesson is the same one this log keeps recording in different clothes. I had
+a plausible cause, it fitted every observation I had, and I stated it. What was
+missing was the one experiment that could have falsified it -- and when that
+experiment was finally cheap to run, it took one call and 25 seconds to
+overturn a claim that had been sitting in three files for a day.

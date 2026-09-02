@@ -349,18 +349,28 @@ settlements, 19 exceptions, 19 calls, nothing capped. Committed at
   ([`out/agent-small-batch.json`](out/agent-small-batch.json)). Lower because
   that batch has a 12% exception rate against the main set's 15%, which is the
   reason a per-100-records figure from one dataset does not transfer to another.
-- **The default model was changed to the one that answers.** It was
-  `gemini-3.7-flash`, which is newer and half the price. Roughly eighteen
-  requests to it timed out, starting from a fresh daily quota, so the cause was
-  not the daily cap. A controlled retry with one variable changed had 3.5 Flash
-  answer in seconds while 3.7 hit the client timeout. **Why it timed out is not
-  established** — the test that would separate "slow" from "not answering" needs
-  a longer ceiling and a quota that was, at the time, spent. So: this client did
-  not get an answer from 3.7 Flash within 90 seconds, eighteen times, and the
-  reason is unknown. That is an observation, not a claim about the model, and it
-  is enough to justify defaulting to the one that answers. 3.7 stays available
-  through `--model`. Note that timed-out requests still counted against the
-  quota: they reached Google and never came back.
+- **The default model is the one with a consistent record, and the reason is
+  not the one I first gave.** `gemini-3.7-flash` is newer and half the price.
+  Roughly eighteen requests to it timed out at a 90-second ceiling, starting
+  from a fresh daily quota, so the cause was not the daily cap. I wrote that up
+  as the model being slow or not answering. Then it answered in **25.5 seconds**
+  — comfortably inside the ceiling it had been blowing through — with 462 input,
+  205 output and 780 thinking tokens for $0.00404, about 3.4x cheaper per note
+  than 3.5 Flash and using 40% fewer thinking tokens.
+
+  So "3.7 Flash is slow" is ruled out, and why those eighteen requests were
+  never answered is **unknown**. Several things differed between the two
+  attempts — the key, the elapsed time, and the request pacing, which was 3.5s
+  (17 requests a minute against a limit of 5) during the failures and 12.5s
+  during the success. That last one is a plausible contributing factor and is
+  untested; exceeding a per-minute limit ought to produce a 429 rather than
+  silence, so it is a hypothesis rather than an explanation.
+
+  The default stays `gemini-3.5-flash` on track record: 25 calls across four
+  runs, no failures. 3.7 has one success and eighteen unexplained timeouts. It
+  is cheaper and it is available through `--model`, and on this evidence it is
+  worth retrying, but the default should be the one that has never yet failed
+  rather than the one that is cheaper when it works.
 
 The same batch reconciles in 0.04 seconds with zero model calls and identical
 verdicts.

@@ -55,15 +55,22 @@ PRICING = {
 #: allowance -- 5 a minute, 20 a day -- so the "only 3.7 can run a full batch"
 #: argument that also favoured it was about a number that did not exist.
 #:
-#: In practice roughly eighteen requests to it timed out, starting from a fresh
-#: daily quota, and a controlled retry -- same code, same key, same network, one
-#: variable changed -- had 3.5 Flash answer in seconds while 3.7 hit the client
-#: timeout. WHY is not established: the test that would separate "slow" from
-#: "not answering" needs a longer ceiling and a quota that was already spent.
-#: It stays in PRICING and available through --model, because the price was read
-#: and the observation may be temporary. It is not the default, because
-#: defaulting to a model this project has never had an answer from is exactly
-#: the asymmetry it argues against elsewhere.
+#: In practice roughly eighteen requests to it timed out at a 90s ceiling,
+#: starting from a fresh daily quota, so the daily cap does not explain them.
+#: That was written up here as the model being slow. It is not: on a later
+#: attempt it answered in 25.5 seconds, well inside the same ceiling, and more
+#: cheaply than 3.5 Flash on both price and thinking tokens.
+#:
+#: So why those eighteen went unanswered is unknown. The key, the elapsed time
+#: and the pacing all differed -- the failures ran at 3.5s between requests
+#: (17 a minute against a limit of 5), the success at 12.5s. Exceeding a
+#: per-minute limit ought to produce a 429 rather than silence, so that is a
+#: hypothesis and not an explanation, and it is untested.
+#:
+#: The default is 3.5 Flash on track record alone: 25 calls across four runs
+#: with no failures, against 3.7's one success and eighteen unexplained
+#: timeouts. 3.7 is cheaper and stays available through --model. This is a
+#: judgement about evidence, not about the models.
 DEFAULT_MODELS = {
     "anthropic": "claude-opus-5",
     "gemini":    "gemini-3.5-flash",
