@@ -935,3 +935,15 @@ while the other writes almost none, and the reconciliation coming out
 byte-identical, proves the verdicts do not depend on the model at all -- which is
 the actual claim, and the reason the arithmetic was kept away from the model in
 the first place.
+
+**Update, minutes later.** The dashboard for the right project shows 3.7 Flash
+at **21/20 requests for the day**, in red. So the eight rate limits in that
+batch are explained after all, and dully: the daily cap. I had recorded the
+failure as unexplained an hour earlier while reading a different project's
+numbers, which is the second time today a dashboard misread has produced a
+confident wrong sentence in this file.
+
+That leaves one open question rather than two. The 429s in the batch are
+accounted for. The eighteen SILENT timeouts from earlier -- requests that were
+counted against quota and never answered -- are still unexplained, and that is
+a different failure mode from a 429, which arrives promptly and says what it is.
