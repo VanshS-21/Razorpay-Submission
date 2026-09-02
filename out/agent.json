@@ -1,35 +1,39 @@
 {
-  "model": "gemini-3.5-flash",
-  "provider": "gemini",
-  "is_stub": false,
+  "model": "SCRIPTED-STUB[hallucinating]",
+  "provider": "none (scripted stub, wire shape: anthropic)",
+  "is_stub": true,
   "proposals": [],
   "matches_proposed": 0,
-  "narrations_accepted": 2,
-  "seconds": 16.579,
+  "narrations_accepted": 0,
+  "seconds": 0.002,
+  "exceptions_total": 19,
   "usage": {
-    "model": "gemini-3.5-flash",
-    "calls": 2,
+    "batch_complete": true,
+    "usd_per_note": null,
+    "usd_per_call": null,
+    "model": "SCRIPTED-STUB[hallucinating]",
+    "calls": 19,
+    "successes": 19,
     "errors": 0,
+    "skipped": 0,
+    "gave_up": "",
     "throttled": 0,
-    "input_tokens": 885,
-    "output_tokens": 337,
-    "thought_tokens": 2308,
-    "billable_output_tokens": 2645,
+    "input_tokens": 6538,
+    "output_tokens": 1140,
+    "thought_tokens": 0,
+    "billable_output_tokens": 1140,
     "cache_read_tokens": 0,
-    "price_known": true,
-    "usd_total": 0.025133,
-    "inr_total": 2.2117,
-    "per_100_records": {
-      "usd": 0.019946,
-      "inr": 1.7553,
-      "input_tokens": 702,
-      "output_tokens": 2099
-    }
+    "price_known": false,
+    "usd_total": null,
+    "inr_total": null,
+    "per_100_records": {}
   },
   "guard": {
-    "checked": 2,
-    "rejected": 0,
-    "rejection_rate": 0.0,
-    "reasons": {}
+    "checked": 19,
+    "rejected": 19,
+    "rejection_rate": 1.0,
+    "reasons": {
+      "invented_figure:9999999.99": 19
+    }
   }
 }

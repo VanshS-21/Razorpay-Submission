@@ -1,0 +1,113 @@
+name: CI
+
+# The README makes three checkable claims: the tests pass without a network,
+# the committed dataset is exactly what the generator produces, and the engine
+# clears nothing it should have escalated. Each one is a job here, so a claim
+# that stops being true turns this badge red rather than waiting for a reader
+# to notice.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: tests (${{ matrix.os }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install
+        # No third-party runtime dependencies by design; pytest is the only
+        # thing installed, and no API key is present in this environment.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Run the suite
+        run: python -m pytest -q
+
+  reproducibility:
+    name: the dataset regenerates byte for byte
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e .
+      - name: Regenerate both datasets over the committed ones
+        run: |
+          python -m recon.generate --out data
+          python -c "from recon.adversarial import write_holdout; from pathlib import Path; write_holdout(Path('data/holdout'), seed=1337)"
+      - name: Nothing may have changed
+        # The generator writes the data AND the answer key, so this is the
+        # check that the committed numbers were produced by the committed code
+        # and not by some earlier version of it.
+        run: git diff --exit-code -- data/
+
+  safety:
+    name: zero false clears on both sets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e .
+      - name: Main set and adversarial holdout
+        # demo.py exits non-zero on a false clear, on incomplete scoring, and
+        # on an unreadable source file.
+        run: python demo.py
+      - name: Every headline number in the README is what the code produces
+        # The severest finding all three audits had available was a gap between
+        # what the documentation claims and what the code does. This closes it:
+        # the README's table is scraped and compared against a live run, and a
+        # claim that can no longer even be located fails rather than skips.
+        run: python eval/check_claims.py
+      - name: The guard must reject a model that invents a figure
+        run: |
+          python -m recon.cli --input data --llm --llm-stub hallucinating --quiet
+          echo "exit $? (0 expected: the guard rejected every note, verdicts unmoved)"
+
+  agent-layer:
+    name: the engine runs with no API key
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e .
+      - name: No key, no SDK, no network -- still reconciles
+        # The deterministic engine is the product. If this ever needs a key,
+        # the architecture claim in the README has stopped being true.
+        run: |
+          python -m recon.cli --input data --quiet
+      - name: Asking for the model without a key fails loudly, not silently
+        run: |
+          set +e
+          python -m recon.cli --input data --llm --quiet
+          code=$?
+          set -e
+          if [ "$code" -ne 3 ]; then
+            echo "expected exit 3, got $code -- a run that asked for the model"
+            echo "and got nothing must say so rather than quietly degrading"
+            exit 1
+          fi

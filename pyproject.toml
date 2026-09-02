@@ -6,11 +6,31 @@ build-backend = "setuptools.build_meta"
 name = "recon"
 version = "0.1.0"
 description = "Three-way settlement reconciliation agent (Razorpay AI Buildathon, Track 04)"
+readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
+authors = [{ name = "Vansh S" }]
+keywords = ["reconciliation", "settlements", "fintech", "payments", "razorpay"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business :: Financial :: Accounting",
+]
+
 # The deterministic core has NO third-party dependencies. `anthropic` is needed
-# only for the optional agent layer; `--no-llm` runs the whole pipeline without it.
+# only for the optional agent layer; the whole pipeline runs without it.
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/VanshS-21/Razorpay-Submission"
+Source = "https://github.com/VanshS-21/Razorpay-Submission"
+Issues = "https://github.com/VanshS-21/Razorpay-Submission/issues"
+
+[project.scripts]
+recon = "recon.cli:main"
 
 [project.optional-dependencies]
 # The output_config={"format": ...} shape this code uses needs a recent

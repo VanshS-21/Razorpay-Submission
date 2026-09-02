@@ -1,5 +1,9 @@
 # Three-way settlement reconciliation
 
+[![CI](https://github.com/VanshS-21/Razorpay-Submission/actions/workflows/ci.yml/badge.svg)](https://github.com/VanshS-21/Razorpay-Submission/actions/workflows/ci.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 **Razorpay AI Buildathon — Track 04, AI Finance Controller**
 
 An agent that closes the settlement reconciliation loop across a batch of
