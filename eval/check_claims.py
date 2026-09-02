@@ -87,9 +87,11 @@ def main() -> int:
                 f"({s['false_escalate_count']}/{s['should_reconcile_total']})")
         checks.append((f"false-escalate rate ({name})", cell, want))
 
+    # The holdout cell carries a label after the figure, so that 50% does not
+    # read as failure to someone skimming. Compare the figure only.
     a, b = row(readme, "Match rate")
-    checks += [("match rate (main)", a, pct(main_set["match_rate"])),
-               ("match rate (holdout)", b, pct(holdout["match_rate"]))]
+    checks += [("match rate (main)", a.split()[0], pct(main_set["match_rate"])),
+               ("match rate (holdout)", b.split()[0], pct(holdout["match_rate"]))]
 
     a, _b = row(readme, "Unexplained bank rows")
     checks.append(("unexplained bank rows (main)", a,
