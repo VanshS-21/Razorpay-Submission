@@ -327,11 +327,20 @@ run 2   410 input · 160 output · 1,280 thinking tokens · $0.013575
   independent check on the same finding and agrees: 88.9% of output, 6.6×.
 - **The default model was changed to the one that answers.** It was
   `gemini-3.7-flash`, which is newer and half the price. Every request to it
-  timed out. A controlled retry with one variable changed had 3.5 Flash answer
-  in seconds while 3.7 hit the client timeout, so the default is now the model
-  this project has actually got answers from. 3.7 stays available through
-  `--model`. Note that the timed-out requests still counted against the daily
-  quota: they reached Google and never came back.
+  timed out — roughly eighteen of them, starting from a fresh daily quota, so
+  the cause was not the daily cap. A controlled retry with one variable changed
+  had 3.5 Flash answer in seconds while 3.7 hit the client timeout, so the
+  default is now the model this project has actually got answers from. 3.7
+  stays available through `--model`.
+
+  **Why it timed out is not established.** The obvious next test — one call at a
+  five-minute ceiling, to separate "slow" from "not answering" — was run and is
+  inconclusive, because by then 3.7's daily quota was spent and an exhausted
+  call fails whatever its latency. So the honest statement is that 3.7 Flash did
+  not answer this client within 90 seconds, eighteen times, and that the reason
+  is unknown. It is not a claim about the model. Note also that the timed-out
+  requests counted against the quota: they reached Google and never came back,
+  and a client-side timeout does not refund one.
 - **One complete batch has been run, on a smaller dataset.** The free tier is
   5 requests a minute and 20 a day, so a 19-call batch fits — but only with
   correct pacing, and that took a while to get right (below). A 25-settlement

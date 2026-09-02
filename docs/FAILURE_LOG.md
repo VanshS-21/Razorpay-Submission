@@ -751,3 +751,30 @@ retrying a hung batch.
 
 Reading a limit off a dashboard took two minutes. Inferring it from an error
 message took a week and was wrong.
+
+### An experiment that answered nothing, recorded anyway
+
+3.7 Flash had timed out on every request. The open question was whether it is
+slow or not answering at all, which matters because it is the reason the default
+model changed. The test: one call with the timeout raised from 90s to 300s. If
+it came back at 140s, the model works and my 90s ceiling was simply too low --
+a different and more honest conclusion than "it times out".
+
+It failed. And the result is worthless, because by then 3.7's daily quota was
+spent: 20 of 20. A call against an exhausted quota fails whatever its latency,
+so the run separates nothing.
+
+Two things worth keeping from a wasted call.
+
+The earlier timeouts are still real and still unexplained. They started from a
+fresh daily allowance -- roughly eighteen requests went out and none came back
+-- so the daily cap does not explain them. What the README can honestly say is
+that this client did not get an answer from 3.7 Flash within 90 seconds,
+eighteen times, and that the reason is unknown. It cannot say the model is
+broken, and it no longer does.
+
+And the design of the experiment was wrong before it ran. I knew the quota was
+at 18/20 when I proposed it; I did not think about whether 2 remaining calls
+could carry the question. A test that cannot distinguish its two outcomes is not
+a test, which is the same lesson this log already records about tests over paths
+that cannot execute -- this time about an experiment rather than an assertion.
