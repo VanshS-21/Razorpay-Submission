@@ -57,7 +57,11 @@ def main() -> int:
     if rc_main == 0 and rc_hold == 0:
         print("RESULT: zero false clears on both sets.")
     else:
-        print("RESULT: FALSE CLEARS PRESENT -- see the exception lists above.")
+        why = {1: "FALSE CLEARS PRESENT -- see the exception lists above.",
+               4: "SCORING WAS INCOMPLETE -- see the warnings above.",
+               2: "A SOURCE FILE COULD NOT BE READ."}
+        bad = rc_main or rc_hold
+        print("RESULT: " + why.get(bad, f"run failed with exit code {bad}."))
     print("Open  out/report.html  in a browser for the visual report.")
     print("Read  eval/metrics.md   for the full numbers and their caveats.")
     print("=" * 74)

@@ -32,7 +32,17 @@ from ..engine.matcher import _days_apart
 #: rupee sign, its HTML entity, and any amount written with the unit trailing.
 #: A guard that only recognises the one spelling its own tests use is not a
 #: guard, and the tests confirmed the implementation rather than the property.
-_SYMBOL = r"(?:Rs\.?|INR\.?|₹)\s*([\d,]+(?:\.\d{1,2})?)"
+#:
+#: The leading \b is load-bearing. Without it, and compiled with re.I, the "rs"
+#: at the end of an ordinary English plural matched: "orders 4471" extracted
+#: Rs 4,471.00, as did "hours 48", "customers 1200" and "numbers 88421". Nine of
+#: fourteen common plurals fired. Since an extracted figure that is not in the
+#: allowed set rejects the whole note, broadening the pattern had quietly
+#: started rejecting correct notes -- and it did so worst on "orders", the word
+#: a LEDGER_MISMATCH note is necessarily about. The failure log's own warning
+#: applies: a guard that rejects everything is trivially safe and useless. The
+#: reject path was widened here without re-measuring the accept path.
+_SYMBOL = r"(?:\b(?:Rs|INR)\.?|₹)\s*([\d,]+(?:\.\d{1,2})?)"
 _TRAILING = r"\b([\d,]+(?:\.\d{1,2})?)\s*(?:rupees?|rs\.?|inr)\b"
 #: "5,000/-" -- the Indian invoice suffix. Carries no currency word at all, so
 #: neither pattern above sees it.

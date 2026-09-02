@@ -87,7 +87,9 @@ def narrate_exceptions(findings: list, units: dict, client, model: str,
     calling the model on them would be spending money to restate "this is fine".
     """
     targets = [f for f in findings if f.disposition is Disposition.EXCEPTION]
-    if limit:
+    # `if limit:` treated 0 as "no cap", so --narrate-limit 0 narrated the whole
+    # batch: asking for zero calls billed for nineteen.
+    if limit is not None:
         targets = targets[:limit]
 
     accepted = 0

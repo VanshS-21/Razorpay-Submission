@@ -151,9 +151,6 @@ p{margin:0 0 var(--space-sm)}
   border:var(--rule-hair) solid currentColor;vertical-align:middle}
 .mark--pass{color:var(--color-ink-2)}
 .mark--fail{color:var(--color-signal)}
-.note--warn{border:1px solid var(--color-signal);padding:12px 14px;
- margin:14px 0 0;font-size:13px;line-height:1.5;color:var(--color-ink)}
-.note--warn b{color:var(--color-signal)}
 .lead-note{color:var(--color-muted);font-size:var(--text-sm);
   margin:var(--space-sm) 0 0;max-width:70ch}
 
@@ -211,6 +208,9 @@ th.num,td.num{text-align:right;white-space:nowrap;
   gap:var(--space-md) var(--space-lg)}
 .note{border-top:var(--rule-hair) solid var(--color-rule);
   padding-top:var(--space-sm)}
+.note--warn{border:1px solid var(--color-signal);padding:12px 14px;
+ margin:14px 0 0;font-size:13px;line-height:1.5;color:var(--color-ink)}
+.note--warn b{color:var(--color-signal)}
 .note p{font-size:var(--text-sm);color:var(--color-ink-2);
   margin:var(--space-2xs) 0 0}
 
@@ -293,7 +293,8 @@ def render_html(metrics: dict, findings: list, timing: dict,
     # that the safety figure is read first, quietly dropped the caveat.
     unscored = metrics.get("unscored") or []
     unmatched_key = metrics.get("unmatched_key") or []
-    incomplete = bool(unscored or unmatched_key or not metrics.get("scored"))
+    incomplete = bool(unscored or unmatched_key or not metrics.get("scored")
+                      or not metrics.get("must_escalate_total"))
     passed = fc == 0 and not incomplete
     exceptions = sorted(
         (f for f in findings if f.disposition is Disposition.EXCEPTION),
@@ -306,6 +307,8 @@ def render_html(metrics: dict, findings: list, timing: dict,
 
     P = []
     A = P.append
+    A("<!doctype html>")
+    A('<meta charset="utf-8">')
     A("<title>Settlement Reconciliation Report</title>")
     A(f"<style>{_font_faces()}{CSS}</style>")
     A('<div class="sheet">')

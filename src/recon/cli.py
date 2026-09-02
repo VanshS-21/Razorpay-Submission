@@ -34,7 +34,8 @@ def main(argv=None):
                    help="cap how many exceptions get an LLM-written note")
     p.add_argument("--llm-stub", default=None, dest="stub",
                    choices=["honest", "hallucinating", "overreaching",
-                            "failing", "refusing", "plausible"],
+                            "failing", "refusing", "truncated",
+                            "plausible"],
                    help="drive the agent code path with a SCRIPTED client "
                         "instead of a real model. Exercises the guard offline. "
                         "Produces no measurement of model quality or cost.")
@@ -94,11 +95,18 @@ def main(argv=None):
 
     # A run that asked for the model and got nothing from it did not do what it
     # was told, however good the reconciliation underneath was.
-    if a.llm and agent and not agent["usage"]["successes"] and agent["usage"]["errors"]:
-        print(f"error: --llm was requested but not one of the "
-              f"{agent['usage']['calls'] or agent['usage']['errors']} model "
-              f"calls produced usable output; no model output reached this "
-              f"report", file=sys.stderr)
+    u = agent["usage"] if agent else {}
+    if a.llm and agent and not u["successes"] and (u["errors"] or u.get("skipped")):
+        # Count what actually happened. Reporting skipped calls as failed ones
+        # said "not one of the 19 model calls produced usable output" when two
+        # calls were made and seventeen were never sent.
+        made, skipped = u["calls"], u.get("skipped", 0)
+        print(f"error: --llm was requested but no model output reached this "
+              f"report: {made} call(s) made, none usable"
+              + (f", {skipped} never attempted" if skipped else ""),
+              file=sys.stderr)
+        if u.get("gave_up"):
+            print(f"       {u['gave_up']}", file=sys.stderr)
         return 3
 
     if metrics["false_clear_count"]:
@@ -106,7 +114,8 @@ def main(argv=None):
     # A green exit code has to mean "everything was checked and everything was
     # fine". Scoring that skipped units, or scored none at all, is not that --
     # and a CI gate reading only the exit code would never know.
-    if metrics["unscored"] or metrics["unmatched_key"] or not metrics["scored"]:
+    if (metrics["unscored"] or metrics["unmatched_key"]
+            or not metrics["scored"] or not metrics["must_escalate_total"]):
         print("error: scoring was incomplete -- see the warnings above; "
               "the false-clear rate does not cover every settlement",
               file=sys.stderr)
@@ -141,16 +150,20 @@ def _render_agent(a: dict) -> str:
     # Never print a cost for calls that did not happen, or for a model whose
     # price we have not actually read. "$0.0000" reads as "free" rather than as
     # "unknown", and both are the wrong thing to put beside real token counts.
-    if (not a.get("is_stub") and u["calls"] and u.get("price_known")
+    # `successes`, not `calls`: a capped run in which every call was refused or
+    # truncated still had calls, and printed a real dollar figure directly
+    # beside "0 notes accepted".
+    if (not a.get("is_stub") and u.get("successes") and u.get("price_known")
             and not u.get("batch_complete")):
-        out.append(f"  cost per note         ${u['usd_per_call']:.5f} "
-                   f"(measured over {u['calls']} of "
+        out.append(f"  cost per note         ${u['usd_per_note']:.5f} "
+                   f"(measured over {u['successes']} note(s) from "
+                   f"{u['calls']} call(s), of "
                    f"{a.get('exceptions_total', '?')} exceptions)")
         out.append("  cost per 100 records  NOT REPORTED -- this run was capped "
                    "by --narrate-limit,")
         out.append("                        so scaling it to a full batch would "
                    "understate the cost.")
-    if per and not a.get("is_stub") and u["calls"] and u.get("price_known"):
+    if per and not a.get("is_stub") and u.get("successes") and u.get("price_known"):
         out.append(f"  cost per 100 records  ${per['usd']:.4f} "
                    f"(~Rs {per['inr']:.2f})")
     if a.get("is_stub"):
@@ -162,6 +175,11 @@ def _render_agent(a: dict) -> str:
         out.append(f"  rate limited          {u['throttled']} (waited and retried)")
     if u["errors"]:
         out.append(f"  api errors            {u['errors']}")
+    if u.get("skipped"):
+        out.append(f"  not attempted         {u['skipped']} "
+                   f"(the run stopped early; these were never sent)")
+    if u.get("gave_up"):
+        out.append(f"  ** {u['gave_up']}")
     return "\n".join(out)
 
 

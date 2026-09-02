@@ -131,12 +131,25 @@ def render_console(metrics: dict, findings: list[Finding], timing: dict,
     out.append("")
     out.append("SAFETY  (the metric that matters most)")
     out.append("-" * w)
-    verdict = "PASS" if fc == 0 else "FAIL"
-    out.append(f"  False-clear rate      {_pct(metrics['false_clear_rate'])}   "
+    # A rate over an empty population is not a result. --quick produces a batch
+    # with no must-escalate class at all, and 0.0% [PASS] over nothing was the
+    # one place this report still printed a rate as though it meant something.
+    none_to_catch = not metrics["must_escalate_total"]
+    verdict = "----" if none_to_catch else ("PASS" if fc == 0 else "FAIL")
+    shown = "  --  " if none_to_catch else _pct(metrics['false_clear_rate'])
+    out.append(f"  False-clear rate      {shown}   "
                f"({fc} of {metrics['must_escalate_total']} must-escalate units)  [{verdict}]")
     out.append(f"  False-escalate rate   {_pct(metrics['false_escalate_rate'])}   "
-               f"({metrics['false_escalate_count']} units sent to a human unnecessarily)")
-    if metrics["unscored"] or metrics["unmatched_key"] or not metrics["scored"]:
+               f"({metrics['false_escalate_count']} of "
+               f"{metrics['should_reconcile_total']} that should have reconciled)")
+    if none_to_catch:
+        out.append("")
+        out.append("  !! THIS BATCH CONTAINS NOTHING THAT MUST ESCALATE, so the "
+                   "false-clear rate")
+        out.append("  !! is a rate over an empty set. It is not evidence of "
+                   "anything.")
+    if (metrics["unscored"] or metrics["unmatched_key"] or not metrics["scored"]
+            or none_to_catch):
         out.append("")
         out.append("  !! THE RATE ABOVE IS NOT A CLEAN BILL OF HEALTH.")
         if metrics["unscored"]:

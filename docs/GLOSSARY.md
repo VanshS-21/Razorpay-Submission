@@ -245,8 +245,11 @@ because it is a fact about the system worth knowing.
 
 **Thinking tokens.** Reasoning a model generates but does not show you. Invisible
 in the reply, absent from `output_tokens`, and **billed at the output rate**. In
-this project's measured runs they were **87% of everything paid for** — counting
-only `output_tokens` understated the cost by 5.8×.
+this project's one measured run (two calls against `gemini-3.5-flash`) they were
+**87% of the output tokens and 83% of the bill** — counting only `output_tokens`
+understated that run by 5.8×. The two figures are different things: 87% is
+thinking's share of what was *generated*, 83% its share of what was *charged*,
+because input tokens are also on the invoice and are billed at a lower rate.
 
 **Rate limit / quota.** How many requests an API key may make. Gemini's free
 tier allows 20 requests **per day** for `gemini-3.7-flash` and 5 for

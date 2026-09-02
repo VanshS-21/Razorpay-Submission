@@ -15,9 +15,19 @@ Scenarios:
     hallucinating a note containing a figure the engine never computed
     overreaching  a match proposal that fails the arithmetic re-check
     failing       raises, to prove a dead API degrades instead of exploding
-    refusing      returns stop_reason="refusal"
+    refusing      returns stop_reason="refusal" WITH usable-looking content
+    truncated     valid-looking partial JSON with stop_reason="max_tokens"
 
 Every scenario except `honest` must be caught. That is the test.
+
+`refusing` used to return empty text alongside the refusal, so
+`structured_call` returned None on the `if text else None` line before the
+stop_reason guard was ever consulted -- deleting that guard entirely left all
+135 tests green. The test named for it passed through a path it did not test.
+This is the third instance of the mistake docs/FAILURE_LOG.md already records
+twice: a test over a path that cannot execute is not weak evidence, it is no
+evidence. Both scenarios now return content that WOULD parse, so the guard is
+the only thing that can reject them.
 """
 
 from __future__ import annotations
@@ -27,7 +37,7 @@ import re
 from dataclasses import dataclass
 
 SCENARIOS = ("honest", "hallucinating", "overreaching", "failing",
-             "refusing", "plausible")
+             "refusing", "truncated", "plausible")
 
 #: A figure provably outside any allowed set this engine can produce.
 #: The generator caps a single line at 15,000,000 paise (Rs 1.5 lakh) and a
@@ -74,7 +84,22 @@ class _Messages:
                        output_tokens=60)
 
         if self.scenario == "refusing":
-            return _Response([_Block("")], usage, stop_reason="refusal")
+            # Content that would parse cleanly. Only the stop_reason says no.
+            return _Response(
+                [_Block(json.dumps({
+                    "explanation": "I cannot help with that request.",
+                    "action_required": "n/a"}))],
+                usage, stop_reason="refusal")
+
+        if self.scenario == "truncated":
+            # A reply that ran out of budget mid-object. Valid-looking right up
+            # to the point where it stops, which is exactly why the stop_reason
+            # and not the parser has to catch it.
+            body = json.dumps({
+                "explanation": "The payout and the bank credit disagree by",
+                "action_required": "Compare the PSP payout advice against"})
+            return _Response([_Block(body[:-12])], usage,
+                             stop_reason="max_tokens")
 
         is_match = "Which candidate does this row refer to?" in prompt
         if is_match:

@@ -28,7 +28,7 @@ Full results, per-class breakdown, and caveats: [`eval/metrics.md`](eval/metrics
 | Unexplained bank rows | 30, all reported | 0 |
 | Throughput | 1,149 lines — **tens of thousands of lines/sec**; see [`eval/metrics.md`](eval/metrics.md) | |
 
-135 tests. No API key or network required for any of them.
+185 tests. No API key or network required for any of them.
 
 Reason-code accuracy on the holdout counts either of a compound's two real
 defects as correct, because with two defects present there is no single right
@@ -268,7 +268,7 @@ prints clean. Tokens are exported to [`docs/tokens.css`](docs/tokens.css).
 python demo.py                      # everything, one command
 open out/report.html                # visual report (self-contained, offline)
 pip install -e ".[dev]"             # pytest
-python -m pytest tests/ -q          # 135 tests
+python -m pytest tests/ -q          # 185 tests
 python eval/run_eval.py             # regenerate eval/metrics.md
 ```
 
@@ -303,11 +303,25 @@ Two vendors sit behind one adapter. Everything above it — the prompts,
 tell me what it cost.* Which company answers lives in `agent/llm.py` and nowhere
 else.
 
-`--provider auto` picks whichever API key is in the environment. Run the batch
-twice against different vendors and diff `run.json`: **not one verdict, reason
-code or delta moves.** That is the central architectural claim, demonstrated
-rather than asserted — and if a verdict ever did move, the architecture would be
-wrong.
+`--provider auto` picks whichever API key is in the environment, preferring
+Anthropic if both are set. Run the batch twice against different backends and
+compare the verdicts:
+
+```bash
+jq '.findings[]|{settlement_id,disposition,reason_code,delta}' out/run.json
+```
+
+**Not one disposition, reason code or delta moves.** That is structurally
+guaranteed rather than merely observed: `_attach_proposals` writes only
+`action_required`, `narrate_exceptions` writes only `explanation`,
+`action_required` and `resolved_by`, and no code path re-enters the classifier —
+so there is nothing a model could say that could move a verdict. It has been
+checked against two backends with different wire shapes; never against two live
+vendors, because only one key was available.
+
+Diff the whole file and you will see ~38 fields change across 126 findings, plus
+the timing block. Those are the prose fields, and they are *supposed* to move.
+The four above are the claim.
 
 ### What a real run measured
 
@@ -316,22 +330,31 @@ Anthropic backend has never met a live API — it is exercised only by the scrip
 stub, which is a wire shape I wrote myself, and that circularity is stated here
 rather than hidden.
 
-Three things the real calls taught that no stub could have:
+The whole live record is two calls, against `gemini-3.5-flash`, committed at
+`out/agent.json` so the arithmetic below is checkable like everything else here:
 
-- **Thinking tokens are 87% of the bill and appear nowhere in the reply.**
-  Gemini reasons before answering; that reasoning is billed at the output rate
-  and is *not* included in `total_output_tokens`. Counting only output tokens
-  understated cost by **5.8×**. `Usage.thought_tokens` counts them separately
-  and bills them as output.
-- **A full batch needs 19 model calls; the free tier allows 20 per day.** It only
+```
+885 input · 337 output · 2,308 thinking tokens · $0.025133
+```
+
+Two things follow, and one does not:
+
+- **Thinking tokens are 87% of the output and 83% of the bill, and appear
+  nowhere in the reply.** Gemini reasons before answering; that reasoning is
+  billed at the output rate and is *not* included in `total_output_tokens`.
+  Counting only output tokens understated this run by **5.8×**.
+  `Usage.thought_tokens` counts them separately and bills them as output.
+- **A full batch needs 19 model calls; the free tier allows 20 per day** on
+  `gemini-3.7-flash`, which is the default and which I have not run. It only
   fits because 30 wasted calls were removed (see `docs/FAILURE_LOG.md`). The same
   batch reconciles in 0.04 seconds with **zero** model calls and identical
   verdicts. The model is a garnish; the books close without it.
-- **A capped run cannot be extrapolated.** `--narrate-limit 2` paid for two notes
-  and the report divided that across all 126 settlements — $0.0199 per 100
-  records where the real figure was $0.1895, wrong by 9.5× in the flattering
-  direction. `per_n_records` now refuses to scale an incomplete batch and reports
-  measured cost *per note* instead.
+- **What a full batch costs is not known.** `--narrate-limit 2` paid for two
+  notes and the report divided that across all 126 settlements, reporting $0.0199
+  per 100 records for work it had not done. `per_n_records` now refuses to scale
+  a capped batch. Two calls is a sample, not a measurement, and this section
+  deliberately quotes no per-batch figure — an earlier draft named one, and that
+  figure was the same forbidden extrapolation done by hand.
 
 Cost is reported only for a model whose price has actually been read, and only
 when the whole batch ran. An unpriced model prints no figure at all, because
@@ -346,9 +369,16 @@ python -m recon.cli --input data --llm-stub hallucinating
 
 `--llm-stub` drives the real agent code path with a scripted client that
 misbehaves on purpose — `honest`, `hallucinating`, `overreaching`, `failing`,
-`refusing`, `plausible`. Waiting for a real model to eventually invent a figure
-is not a test; scripting one that definitely does makes the safety property a
-deterministic assertion.
+`refusing`, `truncated`, `plausible`. Waiting for a real model to eventually
+invent a figure is not a test; scripting one that definitely does makes the
+safety property a deterministic assertion.
+
+Two of these produce output identical to `honest` on the shipped dataset:
+`overreaching` and `plausible` both act on the *resolver*, and the shipped data
+leaves no ambiguous bank rows for the resolver to be asked about — it makes zero
+calls. They are exercised by tests that build their own ambiguous fixtures, not
+by the demo. `hallucinating` is the one to run if you want to watch the guard
+work.
 
 **The invariant:** whatever the model does — lies, overreaches, dies, refuses,
 or answers entirely plausibly — the set of settlements escalated to a human does
@@ -451,6 +481,36 @@ docs/FAILURE_LOG.md    what broke, kept live rather than reconstructed
   never quietly.
 - **The guard checks figures, not claims.** See above: a real number used in the
   wrong role survives it.
+- **A zero false-clear rate is scored against the answer key, not against
+  reality.** The key is written by the same generator that writes the data, so
+  it can only mark a settlement wrong in a way the generator knows how to
+  produce. A defect outside the generator's vocabulary makes the engine wrong
+  and the rate still read 0.0%. Three such shapes were found by the third audit
+  and are now escalated (an uncorroborated refund, an uncorroborated payment, an
+  adjustment line) -- but the general point survives the fix: the number answers
+  a narrower question than "nothing was missed", and it is quoted here as the
+  answer to that narrower question.
+- **Charge attribution needs an unambiguous day.** An unreferenced bank charge
+  is attached to a settlement only when its value date carries exactly one. Both
+  generators emit one payout a day, so the rule always fires in testing; a real
+  merchant has dozens, and it never will. The charge then stays in the orphan
+  list and is reported rather than attributed, which is the safe direction --
+  but the holdout's `missing_utr + bank_charge` family measures less than it
+  looks like it does.
+- **Contested consolidations clear nothing.** When two over-credited settlements
+  could each be explained by the same unpaid payout, neither is cleared and both
+  escalate. Correct -- one payout pays for one thing -- but it means a busy
+  statement will escalate more than a quiet one for reasons that are about
+  ambiguity rather than about error.
+- **One currency.** `currency` is read from all three sources and anything other
+  than INR is refused at ingest, loudly. Every total here assumes a single unit,
+  and reconciling across two without a rate is adding numbers that are not the
+  same kind of thing. Multi-currency merchants are simply out of scope.
+- **Money units are inferred per file.** A decimal point anywhere in a money
+  column means the file is in rupees; a file with none is read as paise. Real
+  exports are internally consistent about this, but a file that mixes both
+  conventions genuinely is ambiguous and will be read wrong -- in the loud
+  direction, not the quiet one.
 - **Cost accounting uses floats.** The reconciliation path is integer paise
   throughout, with no exceptions; the USD/INR estimate in `agent/llm.py` is not.
   It never touches a settlement.

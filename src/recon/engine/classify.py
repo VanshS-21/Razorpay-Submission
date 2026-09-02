@@ -70,6 +70,11 @@ def ledger_mismatches(unit: ReconUnit, orders: dict) -> list:
     the only one that can catch an error which nets to zero across a settlement.
     Everything else compares two totals; this compares every line to what the
     business says it actually sold.
+
+    Only lines the ledger can actually be compared against are checked here; a
+    line naming an order the ledger has never heard of is not a disagreement
+    about an amount, it is an absence of corroboration, and
+    `uncorroborated_lines` handles it.
     """
     out = []
     for l in unit.lines:
@@ -78,6 +83,33 @@ def ledger_mismatches(unit: ReconUnit, orders: dict) -> list:
         o = orders.get(l.order_id)
         if o is not None and o.gross_amount != l.amount:
             out.append((l, o))
+    return out
+
+
+def uncorroborated_lines(unit: ReconUnit, orders: dict) -> list:
+    """Lines that move money against an order the merchant's books do not have.
+
+    Every rule above this one compares a line to an order record. All of them
+    therefore skip a line with no usable `order_id` -- and skipping is the same
+    as clearing, because the line's debit still flows into `expected_net`, so the
+    bank still ties to the payout and the settlement reads CLEAN.
+
+    That left two holes wide enough to drive a fraud through. A refund with the
+    `order_id` column left empty walked straight past `unsupported_refunds`, the
+    single defect this project advertises most: Rs 5,000 debited, nothing in the
+    ledger, delta 0, "false-clear rate 0.0% [PASS]". And ADJUSTMENT was in the
+    taxonomy with no rule anywhere that inspected one, so an adjustment line of
+    any size was absorbed into the net without a single check.
+
+    The rule is the same one the whole engine rests on, applied to every line
+    type rather than to the two the generator happens to emit: a line that moves
+    money must name an order the books know about. A blank id is less
+    corroborated than a wrong one, not more.
+    """
+    out = []
+    for l in unit.lines:
+        if not l.order_id or orders.get(l.order_id) is None:
+            out.append(l)
     return out
 
 
@@ -107,6 +139,10 @@ def unsupported_refunds(unit: ReconUnit, orders: dict) -> list:
     an order that was never refunded is invisible to every totals-based check.
 
     That is the shape of a misposted or fraudulent refund, so it escalates.
+
+    A refund whose `order_id` is blank or unknown is handled by
+    `uncorroborated_lines`, which runs first -- it is a stronger finding, not a
+    weaker one.
     """
     out = []
     for l in unit.lines:
@@ -161,6 +197,24 @@ def classify(unit: ReconUnit, m: MatchResult, orders: dict | None = None) -> Fin
     # is that the totals look perfect. An engine that reaches the "amount ties
     # exactly" branch first would clear it and never know.
     if orders:
+        ghost = uncorroborated_lines(unit, orders)
+        if ghost:
+            total = sum(l.debit + l.credit for l in ghost)
+            kinds = ", ".join(sorted({l.type.value for l in ghost}))
+            named = ", ".join(l.order_id or "(no order id)" for l in ghost[:3])
+            return finding(
+                AnomalyClass.LEDGER_MISMATCH,
+                Disposition.EXCEPTION,
+                f"{len(ghost)} line(s) totalling {rupees(total)} ({kinds}) move "
+                f"money against order(s) the merchant's ledger does not have "
+                f"({named}). The settlement still ties to the bank, because the "
+                f"line is inside the payout on both sides -- the books are the "
+                f"only source that can see it at all.",
+                action="Identify what each line is for before closing. A line "
+                       "with no order behind it is either a misposting or money "
+                       "moving on an instruction the books never recorded.",
+            )
+
         phantom = unsupported_refunds(unit, orders)
         if phantom:
             total = sum(l.debit for l, _ in phantom)

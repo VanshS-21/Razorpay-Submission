@@ -48,8 +48,14 @@ PRICING = {
 #: Opus 5 for Anthropic deliberately: the model is describing money to a human
 #: who will act on the description, so trading quality for price is the
 #: operator's call to make explicitly via --model, not one to bury in a
-#: constant. Gemini 3.7 Flash because it is both newer and half the price of
-#: 3.5 Flash. Measured cost per 100 records is reported either way.
+#: constant. Gemini 3.7 Flash because it is newer, half the price of 3.5 Flash,
+#: and has the larger free-tier allowance (20 calls a day against 5) -- a full
+#: batch is 19 calls, so it is the only one of the two a free key can run at all.
+#:
+#: It has never been called. The one live measurement in this repo was made
+#: against gemini-3.5-flash, because 3.7's daily quota was already spent that
+#: day. Cost is reported from the model that actually ran, never from this
+#: constant, and every published token figure names 3.5-flash.
 DEFAULT_MODELS = {
     "anthropic": "claude-opus-5",
     "gemini":    "gemini-3.7-flash",
@@ -101,6 +107,14 @@ class Usage:
     #: errors: being throttled says something about the plan, being refused
     #: says something about the request, and one must not read as the other.
     throttled: int = 0
+    #: Calls the circuit breaker never made. Counted apart from `errors`,
+    #: because a call that was never attempted is not a model failure and must
+    #: not be reported as one -- nineteen skipped calls printed as "api errors
+    #: 19" is indistinguishable from nineteen refusals, and the exit-3 message
+    #: then stated a false fact about the run.
+    skipped: int = 0
+    #: Why the run stopped early, printed unconditionally when set.
+    gave_up: str = ""
     #: Reasoning tokens the model generated but did not return.
     #:
     #: Invisible in the reply and absent from output_tokens, but billed at the
@@ -141,10 +155,17 @@ class Usage:
 
         A capped run (--narrate-limit) pays for a few notes and this used to
         divide that cost across every settlement, as though the whole batch had
-        been done. Two notes out of nineteen reported $0.0199 per 100 records
-        when the real figure was $0.1895: a genuine measurement, correctly
-        computed, wearing a label that did not describe it -- and wrong in the
-        flattering direction, which is the worst way to be wrong about cost.
+        been done: two notes out of nineteen reported $0.0199 per 100 records,
+        a genuine measurement wearing a label that did not describe it, and
+        wrong in the flattering direction, which is the worst way to be wrong
+        about cost.
+
+        What the full-batch figure would have been is NOT recorded here, and the
+        first draft of this docstring got that wrong too -- it named $0.1895 as
+        "the real figure" when $0.1895 is just $0.0199 x 19/2, the same
+        extrapolation this method exists to refuse, done by hand. Two calls is a
+        sample. The honest statement is that the run was capped and no per-batch
+        cost follows from it.
         """
         if not n or self.usd is None or not complete or not self.successes:
             return {}
@@ -160,12 +181,20 @@ class Usage:
         usd = self.usd
         return {
             "batch_complete": complete,
+            # Per NOTE, so the denominator is notes -- calls that failed still
+            # cost money but produced nothing, and dividing by attempts reported
+            # 19 calls with 1 usable note as if each note cost a nineteenth of
+            # what it did.
+            "usd_per_note": None if usd is None or not self.successes
+                            else round(usd / self.successes, 6),
             "usd_per_call": None if usd is None or not self.calls
                             else round(usd / self.calls, 6),
             "model": self.model,
             "calls": self.calls,
             "successes": self.successes,
             "errors": self.errors,
+            "skipped": self.skipped,
+            "gave_up": self.gave_up,
             "throttled": self.throttled,
             "input_tokens": self.input_tokens,
             "output_tokens": self.output_tokens,
@@ -293,12 +322,12 @@ class GeminiBackend(Backend):
         # silently, because the errors are swallowed by design. Two calls that
         # burn all their retries is enough evidence to stop asking.
         if self._gave_up:
-            usage.errors += 1
+            usage.skipped += 1
             return None
 
         for attempt in range(MAX_RETRIES + 1):
             out = self._attempt(model, system, prompt, schema, usage,
-                                last=attempt == MAX_RETRIES)
+                                max_tokens, last=attempt == MAX_RETRIES)
             if out is not _RETRY:
                 if out is not None:
                     self._exhausted = 0
@@ -307,13 +336,16 @@ class GeminiBackend(Backend):
         self._exhausted += 1
         if self._exhausted >= 2:
             self._gave_up = True
-            _debug(RuntimeError(
-                "rate limited on every retry twice in a row -- giving up on "
-                "the remaining calls rather than grinding through backoff. "
-                "The quota is most likely spent for the day."))
+            # Not via _debug(). This is the reason the rest of the batch is
+            # missing, and hiding it behind RECON_LLM_DEBUG made a stopped run
+            # look like a refused one.
+            usage.gave_up = (
+                f"stopped after {self._exhausted} consecutive calls exhausted "
+                f"every retry; the remaining calls were not attempted. The "
+                f"quota is most likely spent for the day.")
         return None
 
-    def _attempt(self, model, system, prompt, schema, usage, last):
+    def _attempt(self, model, system, prompt, schema, usage, max_tokens, last):
         # Free-tier pacing, so most calls never hit the limit in the first
         # place. The retry above is the safety net, not the strategy.
         wait = GEMINI_MIN_INTERVAL - (time.monotonic() - self._last_call)
@@ -331,6 +363,10 @@ class GeminiBackend(Backend):
                     "mime_type": "application/json",
                     "schema": schema,
                 },
+                # Was accepted by complete() and then dropped on the floor, so
+                # raising the ceiling changed nothing on the only vendor this
+                # project has actually called.
+                max_output_tokens=max_tokens,
             )
             u = getattr(r, "usage", None)
             if u:
@@ -439,9 +475,17 @@ def structured_call(backend, model: str, system: str, prompt: str,
 
     max_tokens was 1024, which has to hold an exception note AND whatever
     reasoning the model does first. Thinking is on by default on the Anthropic
-    default model, and measured Gemini runs spent 87% of their output budget on
-    it -- so a truncated reply was the likely shape of failure on a path that
+    default model, and the measured Gemini run spent 87% of its output tokens on
+    it -- so a truncated reply is a plausible shape of failure on a path that
     has never been exercised against a live key.
+
+    Raising it to 4096 was at first inert where it mattered: GeminiBackend
+    accepted the argument and never passed it to the API, so the only vendor
+    this project has actually called ignored the ceiling entirely. It is wired
+    through now. On Anthropic the ceiling is shared with thinking tokens, and
+    4096 may still be too low; --model and an explicit cap are the operator's
+    lever. This paragraph previously claimed the change had addressed the likely
+    live failure. It had not; it had changed a number the live path never read.
     """
     out = backend.complete(model, system, prompt, schema, max_tokens, usage)
     if out is not None:

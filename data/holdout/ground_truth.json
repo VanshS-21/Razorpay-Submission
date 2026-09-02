@@ -137,10 +137,7 @@
     "expected_disposition": "exception",
     "injected_delta": 0,
     "note": "COMPOUND [refund_netted_later + phantom_refund]: refund debited for order_8M3B39VGWU0023, which the order ledger still records as paid and never refunded",
-    "also_acceptable": [
-      "refund_netted_later",
-      "phantom_refund"
-    ]
+    "also_acceptable": []
   },
   {
     "settlement_id": "setl_R11HQWZTU10269",
@@ -148,10 +145,7 @@
     "expected_disposition": "exception",
     "injected_delta": 0,
     "note": "COMPOUND [refund_netted_later + phantom_refund]: refund debited for order_MA88MNZ6HB0185, which the order ledger still records as paid and never refunded",
-    "also_acceptable": [
-      "refund_netted_later",
-      "phantom_refund"
-    ]
+    "also_acceptable": []
   },
   {
     "settlement_id": "setl_4TC0N0K4440284",
@@ -159,10 +153,7 @@
     "expected_disposition": "exception",
     "injected_delta": 0,
     "note": "COMPOUND [refund_netted_later + phantom_refund]: refund debited for order_JECZYYKK6G0212, which the order ledger still records as paid and never refunded",
-    "also_acceptable": [
-      "refund_netted_later",
-      "phantom_refund"
-    ]
+    "also_acceptable": []
   },
   {
     "settlement_id": "setl_JWVGWWHTRA0314",
@@ -170,10 +161,7 @@
     "expected_disposition": "exception",
     "injected_delta": 0,
     "note": "COMPOUND [refund_netted_later + phantom_refund]: refund debited for order_GLZB1EF8RH0141, which the order ledger still records as paid and never refunded",
-    "also_acceptable": [
-      "refund_netted_later",
-      "phantom_refund"
-    ]
+    "also_acceptable": []
   },
   {
     "settlement_id": "setl_VM5FJAW01N0344",
@@ -226,7 +214,6 @@
     "injected_delta": -155609,
     "note": "COMPOUND [chargeback_deduction + true_mismatch]: chargeback is real, but does not account for the shortfall",
     "also_acceptable": [
-      "chargeback_deduction",
       "true_mismatch"
     ]
   },
@@ -237,7 +224,6 @@
     "injected_delta": -23852,
     "note": "COMPOUND [chargeback_deduction + true_mismatch]: chargeback is real, but does not account for the shortfall",
     "also_acceptable": [
-      "chargeback_deduction",
       "true_mismatch"
     ]
   },
@@ -248,7 +234,6 @@
     "injected_delta": -43568,
     "note": "COMPOUND [chargeback_deduction + true_mismatch]: chargeback is real, but does not account for the shortfall",
     "also_acceptable": [
-      "chargeback_deduction",
       "true_mismatch"
     ]
   },
@@ -259,7 +244,6 @@
     "injected_delta": -110307,
     "note": "COMPOUND [chargeback_deduction + true_mismatch]: chargeback is real, but does not account for the shortfall",
     "also_acceptable": [
-      "chargeback_deduction",
       "true_mismatch"
     ]
   }

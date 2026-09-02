@@ -173,12 +173,23 @@ def match(units: dict, bank_rows: list) -> MatchResult:
             leftover.remove(chg)
 
     # ---- pass 3: bounded subset-sum ----------------------------------------
-    # Settlements already spent explaining an earlier anchor's surplus.
-    # A payout can only pay for one thing.
-    claimed: set[str] = set()
     # A credit that joined on UTR but exceeds that settlement's net may be a
     # consolidated transfer. Look for unpaid settlements nearby whose nets make
     # up exactly the surplus.
+    #
+    # Collected first, applied second. The greedy version claimed as it went, so
+    # a payout could only be spent once -- but WHICH anchor spent it was decided
+    # by dict iteration order, i.e. by the order settlements happen to appear in
+    # the CSV. Three anchors with identical surpluses and one spare payout
+    # between them: the first one in the file reconciled, the other two
+    # escalated, and reversing the file reversed the verdicts. Deterministic,
+    # and arbitrary. `subset_summing_to` already refuses to answer when more
+    # than one subset fits a target, on the grounds that clearing a payout on
+    # that basis is a guess wearing the costume of a proof; it cannot see this
+    # case, because it reasons about one target at a time and every answer is
+    # locally unique. The same principle applies here, so contested proposals
+    # are dropped and every competing anchor escalates.
+    proposals: list[tuple[str, list[str]]] = []
     for sid, u in units.items():
         rows = res.assigned.get(sid) or []
         if not rows:
@@ -203,25 +214,27 @@ def match(units: dict, bank_rows: list) -> MatchResult:
             for osid, ou in units.items()
             if osid != sid
             and not res.assigned.get(osid)
-            # A member consumed by an earlier group is NOT available again.
-            # Membership was recorded only in `group`/`method` and never in
-            # `assigned`, so this filter re-offered the same unpaid payout to
-            # every subsequent anchor: two separate over-credits could both be
-            # cleared by citing one settlement once each. The uniqueness check
-            # inside subset_summing_to cannot see it -- it reasons about one
-            # target at a time, and both answers are locally unique.
-            and osid not in claimed
             and _days_apart(anchor_date, ou.lines[0].settled_at) <= DATE_WINDOW_DAYS
             and all(_days_apart(cd, ou.lines[0].settled_at) <= DATE_WINDOW_DAYS
                     for cd in credit_dates)
         ]
         found = subset_summing_to(surplus, candidates)
         if found:
-            members = [sid] + found
-            claimed.update(found)
-            for m in members:
-                res.method[m] = "subset_sum"
-                res.group[m] = [x for x in members if x != m]
+            proposals.append((sid, found))
+
+    # A payout can only pay for one thing. Where two anchors both want the same
+    # settlement, neither claim is evidence for itself, so neither is applied.
+    wanted: dict[str, int] = {}
+    for _, found in proposals:
+        for osid in found:
+            wanted[osid] = wanted.get(osid, 0) + 1
+    for sid, found in proposals:
+        if any(wanted[osid] > 1 for osid in found):
+            continue
+        members = [sid] + found
+        for m in members:
+            res.method[m] = "subset_sum"
+            res.group[m] = [x for x in members if x != m]
 
     res.orphan_bank = [r for r in leftover
                        if r not in [a for a, _ in res.ambiguous]]

@@ -42,7 +42,22 @@ from .models import (
     Disposition,
     EntityType,
     GroundTruth,
+    expected_disposition,
 )
+
+
+def _class_or_none(name: str):
+    """An AnomalyClass by value, or None if the string names none.
+
+    `also_acceptable` carried "phantom_refund" for four settlements: not a
+    member of the enum, so it could never match anything scoring compared it
+    against. A dead string in an answer key is not harmless -- it looks like a
+    second correct answer while being nothing at all.
+    """
+    try:
+        return AnomalyClass(name)
+    except ValueError:
+        return None
 
 
 class AdversarialGenerator(Generator):
@@ -73,13 +88,29 @@ class AdversarialGenerator(Generator):
         return ls
 
     def _truth(self, sid, primary, disp, components, note, delta=0):
+        """Record the answer for one compound settlement.
+
+        `components` names the two defects that were injected, and reads in the
+        note. It used to become `also_acceptable` wholesale, which was wrong in
+        one direction that mattered: a component whose own disposition is
+        RECONCILED cannot be a defensible second reading of a settlement that
+        MUST escalate. The phantom-refund family listed `refund_netted_later`,
+        which is exactly the code the Day 2 bug emitted when it cleared those
+        four settlements -- so holdout reason-code accuracy read 100% straight
+        through this project's worst regression. A second reading has to be
+        defensible, not merely different.
+        """
+        acceptable = tuple(
+            c for c in components
+            if _class_or_none(c) is not None
+            and expected_disposition(_class_or_none(c)) is disp)
         self.truth.append(GroundTruth(
             settlement_id=sid,
             true_class=primary,
             expected_disposition=disp,
             injected_delta=delta,
             note=f"COMPOUND [{' + '.join(components)}]: {note}",
-            also_acceptable=tuple(components),
+            also_acceptable=acceptable,
         ))
 
     def _charge_row(self, utr, d, amount):

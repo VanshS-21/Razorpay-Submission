@@ -378,17 +378,25 @@ Google instead.
 Four things broke. Three of them are mine and only one is interesting for its
 code; the rest are interesting for how they hid.
 
-### Thinking tokens are 87% of the bill and appear nowhere in the reply
+### Thinking tokens are 87% of the output and appear nowhere in the reply
 
 The very first call returned 61 input tokens, 60 output tokens -- and 275
 *thought* tokens. Gemini reasons before answering, that reasoning is billed at
 the output rate, and it is not included in `total_output_tokens`.
 
 Written the obvious way, counting `output_tokens` and nothing else, the reported
-cost would have been **5.8x too low**. Across a real 19-call run, thinking was
-87% of everything I paid for. Nothing about a wrong figure there would have
-looked wrong: it is a real number, correctly computed, describing the wrong
+cost would have been **5.8x too low**. Nothing about a wrong figure there would
+have looked wrong: it is a real number, correctly computed, describing the wrong
 thing.
+
+> Corrected on 2 Sept, after a third audit. The paragraph above originally read
+> "across a real 19-call run, thinking was 87% of everything I paid for". Two
+> errors in one clause. There was no 19-call run -- the live record is two calls,
+> and I had written the number I expected a full batch to look like. And 87% is
+> thinking's share of the *output tokens*, not of the bill; of the bill it is
+> 83%, because input tokens are charged too. Getting the unit wrong on the one
+> finding I was proudest of is the same mistake as the taxi meter below, made
+> while writing up the taxi meter.
 
 ### 61% of the model calls were spent on questions with no answer
 
@@ -434,13 +442,24 @@ The free quota meant I could only afford two notes, so I ran with
 
 The two calls really did cost what they cost. But `per_n_records` divided that
 across all 126 settlements, as though the whole batch had been narrated. Two
-notes of nineteen. The honest figure is **$0.1895 per 100 records** -- 9.5x
-higher.
+notes of nineteen.
 
 A taxi meter reading Rs 50 after 2 km, written down as the price of a 20 km
 journey. Wrong in the flattering direction, silently, in the one number an
 operator would actually plan around. `per_n_records` now refuses to extrapolate a
 capped run at all, and reports measured cost *per note* instead.
+
+> Corrected on 2 Sept, after a third audit. This entry originally continued:
+> "The honest figure is **$0.1895 per 100 records** -- 9.5x higher." That
+> sentence is the bug it is reporting. $0.1895 is $0.0199 multiplied by 19/2 --
+> the same extrapolation, done by hand, in the paragraph explaining why the code
+> must never do it. "9.5x" was knowable before the run and measured by nothing.
+> I wrote a fix that refuses to print a number, and then printed the number.
+>
+> The honest statement is that the run was capped at two notes, that those two
+> notes cost $0.025133, and that **what a full batch costs is not known**. It
+> survived two audits because it looks like a measurement and sits beside three
+> real ones.
 
 ### What the guard rails did right
 
@@ -463,3 +482,128 @@ The operational finding matters more than the cost: a 126-settlement batch needs
 That is the architecture argument made by measurement rather than assertion. The
 model writes prose. The arithmetic decides the money. Swap the vendor, or remove
 it entirely, and not one verdict moves.
+
+---
+
+## Day 7
+
+A third independent audit, run with a prompt that told it the easy findings were
+gone and that its value was in the fixes themselves. It was right to be told
+that: eleven of the fifteen mutants it found surviving were fixes applied in the
+previous two days, each written under deadline, reviewed once, and shipped
+without a test that would notice it being undone.
+
+### Three false clears that the false-clear rate cannot see
+
+The engine reported `0.0% [PASS]` on all three of these while money left the
+account and nothing accounted for it:
+
+- a **refund with the `order_id` column left empty**. `unsupported_refunds()`
+  skipped any refund without one -- so the single defect this project advertises
+  most, the one the adversarial holdout was built to catch, was bypassed by
+  leaving a column blank;
+- a **payment line naming an order the ledger has never heard of**. A fabricated
+  refund was caught; a fabricated *sale* was invisible;
+- an **adjustment line of any size**. `ADJUSTMENT` was in the taxonomy, the
+  generator never emitted one, and no rule anywhere inspected one. Its debit
+  flowed straight into `expected_net`, so the bank tied to the payout and the
+  settlement cleared CLEAN.
+
+All three share a shape the two documented false clears do not. The scored rate
+was not lying. It was answering a narrower question than the README implied:
+*the answer key cannot mark a settlement wrong in a way the generator does not
+know how to produce.* A defect outside the generator's vocabulary makes the
+engine wrong and leaves the number at 0.0%. That sentence is now in Known
+limitations, and it is the more interesting half of the finding.
+
+The fix is one rule rather than three, and it is the rule the whole engine
+already rested on, applied to every line type instead of the two the generator
+happens to emit: **a line that moves money must name an order the books know
+about.** A blank id is less corroborated than a wrong one, not more.
+
+### A whole-rupee cell was read as paise
+
+`_int` decided units per **cell**: a decimal point meant rupees, its absence
+meant paise. In a real export where `fee` is `16.95` on one row and `17` on the
+next, the first was Rs 16.95 and the second Rs 0.17. No error, no warning, same
+column, one row apart.
+
+Worse than the blank cell this function had already been hardened against, and
+in exactly the way that matters. A wrong zero at least fails to balance. This
+scaled every column of a row by the same factor, so the settlement stayed
+internally consistent, tied to the bank, and reconciled CLEAN at 1% of its true
+value. Deciding units once per file fixes it and, as a side effect, lets the
+engine read a rupee-denominated export at all -- which it previously could not.
+
+### The reject path was widened without re-measuring the accept path
+
+Day 4 recorded the danger in so many words: *a guard that rejects everything is
+trivially safe and completely useless, and mine was quietly drifting that way.*
+Then I broadened `_SYMBOL` to catch `INR`, compiled it with `re.I`, and left off
+the leading word boundary. The `rs` at the end of an ordinary English plural
+became a currency symbol. `orders 4471` extracted Rs 4,471.00. So did
+`hours 48`, `customers 1200`, `numbers 88421`. Nine of fourteen common plurals
+fired, and since an unrecognised figure rejects the whole note, the guard had
+started rejecting **correct** notes -- worst on `orders`, the word a
+`LEDGER_MISMATCH` note is necessarily about.
+
+`test_an_order_id_is_not_read_as_money` tests precisely this concern and missed
+it, because its fixture is `order_78910 was booked twice` -- no space between the
+word and the digit. The right instinct, and a string that happened not to fire.
+
+One character fixes it. What it cost was a day of the guard being wrong in the
+direction I had already written down as the one to watch for.
+
+### The number I was proudest of was the wrong unit, and the number beside it was not a measurement
+
+Two errors in the same four bullets, and they point in opposite directions:
+
+- "thinking tokens are 87% **of the bill**" -- 87.3% is thinking's share of the
+  *output tokens*. Of the bill it is 82.6%, because input tokens are charged
+  too. The two published figures were mutually inconsistent: 87% of the bill
+  would imply a 7.7x understatement, not the 5.8x reported three lines above it.
+- "the real figure was **$0.1895** per 100 records" -- $0.1895 is $0.0199 times
+  19/2. It is the extrapolation, done by hand, inside the paragraph explaining
+  why `per_n_records` must never do it. "9.5x" was knowable before the run and
+  measured by nothing.
+
+Both survived two prior audits because they look like measurements and sit
+beside three real ones. The corrections are inline above, in the entries where
+the claims were made, rather than quietly edited out.
+
+`out/agent.json` is now force-added to the repository. Every deterministic
+number here is checkable because the data and the key are committed; the model
+numbers were the only ones that were not, and the file that fixes that was one
+line of `.gitignore` away the whole time.
+
+### Nineteen calls that were never made, reported as nineteen failures
+
+The circuit breaker added on Day 6 stops after two calls exhaust their retries.
+Correct. But the give-up went through `_debug()`, which prints nothing unless
+`RECON_LLM_DEBUG` is set, and the skipped calls were counted as `errors` -- so
+the console showed `api errors 19`, indistinguishable from nineteen refusals,
+and the exit message said *"not one of the 19 model calls produced usable
+output"* when two calls had been made and seventeen were never sent. A sentence
+that states a false fact about the run, in the layer whose entire job is to
+report honestly what the model did.
+
+### The third instance of a lesson recorded twice
+
+This log says, twice, that *a test over a path that cannot execute is not weak
+evidence, it is no evidence*. The audit found the third instance live in the
+code: deleting the `stop_reason in ("refusal", "max_tokens")` guard left all 135
+tests green, because the `refusing` stub returned empty text and
+`json.loads(text) if text else None` already returned `None` one line earlier.
+`test_a_refusing_model_degrades_cleanly` passed through a path it did not test.
+There was no truncation scenario at all.
+
+Then I wrote `tests/test_audit_regressions.py` to pin every one of these fixes,
+and one of the tests in it -- the one for the skipped-calls bug -- set
+`usage.skipped = 17` by hand instead of driving the circuit breaker. It passed
+whether the breaker counted skips or errors. I caught it only because I ran each
+new test against a reverted copy of its own fix, and it was the single survivor
+out of fifteen. Fourth instance, written while writing the file whose purpose is
+to catch the first three.
+
+The habit that catches this is not "write a test". It is "revert the fix and
+watch the test fail". Seventeen of them now do.
