@@ -756,3 +756,51 @@ def test_the_gemini_pacing_respects_the_free_tier_rate_limit():
     assert rpm <= llm.GEMINI_FREE_RPM, (
         f"pacing of {llm.GEMINI_MIN_INTERVAL}s is {rpm:.1f} requests/minute "
         f"against a free-tier limit of {llm.GEMINI_FREE_RPM}")
+
+
+def test_a_rate_limit_without_a_stated_delay_is_still_retried():
+    """_retry_after promised a fallback in its docstring and did not have one.
+
+    Google's 429s do not always carry "please retry in Xs". Without the
+    fallback, such a refusal returned None, was treated as a hard error, and the
+    call was burned with no wait -- against a quota that had just refused it. No
+    run here was ever long enough to hit a per-minute limit, so nothing
+    exercised the path.
+    """
+    assert llm._retry_after(Exception("429 retry in 8.0s"), 0) == pytest.approx(8.5)
+    waits = [llm._retry_after(Exception("429 RESOURCE_EXHAUSTED"), a)
+             for a in range(4)]
+    assert all(w is not None for w in waits), "a 429 with no stated delay is not retried"
+    assert waits == sorted(waits), "the fallback must back off, not stay flat"
+    assert max(waits) <= llm.MAX_BACKOFF_S
+    # Things that are not rate limits must still fail fast.
+    assert llm._retry_after(Exception("APITimeoutError: timed out"), 0) is None
+    assert llm._retry_after(Exception("BadRequestError: bad schema"), 0) is None
+
+
+def test_a_batch_that_lost_calls_is_not_reported_as_complete():
+    """`complete` meant "the operator did not cap it", not "it all ran".
+
+    A dry run of 19 calls with one timeout reported $0.1712 per 100 records for
+    18 notes' worth of work: understated, in the flattering direction, which is
+    the same shape as the capped-run bug this class already fixed once.
+    """
+    u = Usage(model="gemini-3.5-flash")
+    for _ in range(18):
+        u.record(inp=430, out=180, thought=1080)
+    u.successes = 18
+    u.errors = 1
+
+    assert u.per_n_records(126, complete=True) == {}, (
+        "a batch that lost a call still scaled its cost across every record")
+    d = u.to_dict(126, complete=True)
+    assert d["batch_complete"] is False
+    assert d["uncapped_by_operator"] is True
+    assert d["per_100_records"] == {}
+
+    clean = Usage(model="gemini-3.5-flash")
+    for _ in range(19):
+        clean.record(inp=430, out=180, thought=1080)
+    clean.successes = 19
+    assert clean.to_dict(126, complete=True)["batch_complete"] is True
+    assert clean.per_n_records(126, complete=True)

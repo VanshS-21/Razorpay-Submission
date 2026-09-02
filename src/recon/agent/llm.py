@@ -50,16 +50,20 @@ PRICING = {
 #: operator's call to make explicitly via --model, not one to bury in a
 #: constant. Gemini 3.5 Flash because it is the one that has actually run here.
 #:
-#: gemini-3.7-flash was the default until it was tried. It is newer, half the
-#: price, and has the larger free-tier allowance (20 calls a day against 5), so
-#: on paper it is the better choice and a 19-call batch fits only on it. In
-#: practice every request to it timed out: a 19-call batch sent requests that
-#: never got answers, and a controlled retry -- same code, same key, same
-#: network, one variable changed -- had 3.5 Flash answer in seconds while 3.7
-#: hit the client timeout. It stays in PRICING and remains available through
-#: --model, because the price was read and the observation may be temporary.
-#: It is not the default, because defaulting to a model this project has never
-#: got an answer from is exactly the asymmetry it argues against elsewhere.
+#: gemini-3.7-flash was the default until it was tried. It is newer and half the
+#: price, so on paper it is the better choice. Both models have the same free
+#: allowance -- 5 a minute, 20 a day -- so the "only 3.7 can run a full batch"
+#: argument that also favoured it was about a number that did not exist.
+#:
+#: In practice roughly eighteen requests to it timed out, starting from a fresh
+#: daily quota, and a controlled retry -- same code, same key, same network, one
+#: variable changed -- had 3.5 Flash answer in seconds while 3.7 hit the client
+#: timeout. WHY is not established: the test that would separate "slow" from
+#: "not answering" needs a longer ceiling and a quota that was already spent.
+#: It stays in PRICING and available through --model, because the price was read
+#: and the observation may be temporary. It is not the default, because
+#: defaulting to a model this project has never had an answer from is exactly
+#: the asymmetry it argues against elsewhere.
 DEFAULT_MODELS = {
     "anthropic": "claude-opus-5",
     "gemini":    "gemini-3.5-flash",
@@ -106,6 +110,11 @@ MAX_RETRIES = int(os.environ.get("RECON_LLM_RETRIES", "4"))
 #: Never sleep longer than this on one retry, however long the API asks for.
 #: A reconciliation run that hangs for ten minutes is its own kind of failure.
 MAX_BACKOFF_S = 45.0
+
+#: First wait when the API refuses for rate but does not say for how long. The
+#: free-tier limit is per MINUTE, so a token wait of a second or two just spends
+#: another request on the same refusal; this doubles from a real starting point.
+RETRY_BASE_S = float(os.environ.get("RECON_LLM_RETRY_BASE", "15"))
 
 #: Give up on a single request after this long. A reasoning model on a large
 #: schema is genuinely slow -- the measured calls spent more tokens thinking
@@ -199,6 +208,15 @@ class Usage:
         """
         if not n or self.usd is None or not complete or not self.successes:
             return {}
+        # `complete` only says the OPERATOR did not cap the run. A batch that
+        # lost calls to errors, or skipped them when the breaker tripped, did
+        # not narrate every exception either -- and scaling what it did spend
+        # across all the records reports a batch cheaper than a real one. An
+        # offline dry run of 19 calls with one timeout reported $0.1712 per 100
+        # records for 18 notes' worth of work. Understated, in the flattering
+        # direction, which is the same shape as the capped-run bug above.
+        if self.errors or self.skipped:
+            return {}
         scale = per / n
         return {
             "usd": round(self.usd * scale, 6),
@@ -210,7 +228,11 @@ class Usage:
     def to_dict(self, n_records: int = 0, complete: bool = True) -> dict:
         usd = self.usd
         return {
-            "batch_complete": complete,
+            # Reports what actually happened, not what was requested. A run
+            # that lost calls did not complete, whatever the operator asked for.
+            "batch_complete": bool(complete and not self.errors
+                                   and not self.skipped),
+            "uncapped_by_operator": complete,
             # Per NOTE, so the denominator is notes -- calls that failed still
             # cost money but produced nothing, and dividing by attempts reported
             # 19 calls with 1 usable note as if each note cost a nineteenth of
@@ -246,7 +268,7 @@ class LLMUnavailable(RuntimeError):
 # Backends -- one per vendor, one method each
 # --------------------------------------------------------------------------
 
-def _retry_after(exc) -> float | None:
+def _retry_after(exc, attempt: int = 0) -> float | None:
     """Seconds to wait, if this exception is a rate limit. None if it is not.
 
     The API states its own delay ("Please retry in 23.85s"), which is better
@@ -259,6 +281,12 @@ def _retry_after(exc) -> float | None:
     m = re.search(r"retry in ([\d.]+)s", text)
     if m:
         return min(float(m.group(1)) + 0.5, MAX_BACKOFF_S)
+    # The fallback this docstring has always promised, and did not have: it
+    # returned None here, so a 429 that did not happen to phrase its delay was
+    # treated as a hard error -- no wait, no retry, the call burned and counted
+    # against a quota it had already been refused by. Not one of the runs so far
+    # was long enough to hit a per-minute limit, so nothing exercised it.
+    return min(RETRY_BASE_S * (2 ** attempt), MAX_BACKOFF_S)
     return None
 
 
@@ -357,7 +385,8 @@ class GeminiBackend(Backend):
 
         for attempt in range(MAX_RETRIES + 1):
             out = self._attempt(model, system, prompt, schema, usage,
-                                max_tokens, last=attempt == MAX_RETRIES)
+                                max_tokens, attempt=attempt,
+                                last=attempt == MAX_RETRIES)
             if out is not _RETRY:
                 if out is not None:
                     self._exhausted = 0
@@ -375,7 +404,8 @@ class GeminiBackend(Backend):
                 f"quota is most likely spent for the day.")
         return None
 
-    def _attempt(self, model, system, prompt, schema, usage, max_tokens, last):
+    def _attempt(self, model, system, prompt, schema, usage, max_tokens,
+                 attempt=0, last=False):
         # Free-tier pacing, so most calls never hit the limit in the first
         # place. The retry above is the safety net, not the strategy.
         wait = GEMINI_MIN_INTERVAL - (time.monotonic() - self._last_call)
@@ -438,7 +468,7 @@ class GeminiBackend(Backend):
                 return None
             return json.loads(r.output_text) if r.output_text else None
         except Exception as e:
-            delay = _retry_after(e)
+            delay = _retry_after(e, attempt)
             if delay is not None and last:
                 # Out of retries and still limited: let complete() count it.
                 usage.errors += 1
