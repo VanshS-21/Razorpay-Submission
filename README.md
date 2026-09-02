@@ -332,24 +332,31 @@ settlements, 19 exceptions, 19 calls, nothing capped. Committed at
 [`out/agent.json`](out/agent.json) so the arithmetic is checkable.
 
 ```
-8,288 input · 3,376 output · 22,423 thinking tokens · $0.2446 · 264s
-19 of 19 notes accepted · 0 guard rejections · 0 errors · 0 rate limits
+run 1   8,288 input · 3,376 output · 22,423 thinking · $0.2446 · $0.1941 per 100 records
+run 2   8,288 input · 3,445 output · 22,087 thinking · $0.2422 · $0.1922 per 100 records
+
+both runs: 19 of 19 notes accepted · 0 guard rejections · 0 errors · 0 rate limits
 ```
 
-- **$0.1941 per 100 records, measured.** This section used to say a full
-  batch's cost was unknown, because every run had been capped and
-  `per_n_records` refuses to scale one. It is not unknown any more. An earlier
-  draft published `$0.1895` here as "the real figure"; that was
-  `$0.0199 x 19/2`, an extrapolation wearing a measurement's clothes. It turned
-  out to be **2.4% from the measured value** — which changes nothing about
-  whether it should have been published. A guess that lands close is still a
-  guess, and the reader had no way to tell which they were reading.
+- **$0.192–$0.194 per 100 records, across two full batches.** This section used
+  to say a full batch's cost was unknown, because every run had been capped and
+  `per_n_records` refuses to scale one. It is measured now, and measured twice,
+  because this file refuses to quote throughput as a single figure and owed the
+  same standard to a number about money. The two runs differ by 1.0%: the
+  prompts are deterministic, so the input tokens are identical to the token, and
+  the variation is entirely in how long the model chose to think.
+
+  An earlier draft published `$0.1895` here as "the real figure". That was
+  `$0.0199 x 19/2`, an extrapolation wearing a measurement's clothes, and it
+  landed **2.4% from the measured value** — which changes nothing about whether
+  it should have been published. A guess that lands close is still a guess, and
+  the reader had no way to tell which they were reading.
 - **Thinking tokens are 87% of the output and 83% of the bill, and appear
   nowhere in the reply.** Gemini reasons before answering; that reasoning is
   billed at the output rate and is absent from `total_output_tokens`. Counting
   only output tokens understates this batch by **5.7×**. The figure has now held
-  across four independent runs of 1, 2, 3 and 19 calls: 88.9%, 87.3%, 85.3%,
-  86.9%.
+  across five independent runs of 1, 2, 3, 19 and 19 calls: 88.9%, 87.3%, 85.3%,
+  86.9%, 86.5%.
 - **The guard rejected nothing, and that is the result of a fix.** 0 of 19.
   Six of those notes are `LEDGER_MISMATCH`, the class whose notes the guard was
   rejecting that same morning because the order ledger's values were missing

@@ -947,3 +947,26 @@ That leaves one open question rather than two. The 429s in the batch are
 accounted for. The eighteen SILENT timeouts from earlier -- requests that were
 counted against quota and never answered -- are still unexplained, and that is
 a different failure mode from a 429, which arrives promptly and says what it is.
+
+### The cost figure, measured twice
+
+The README refuses to quote throughput as a single number, on the grounds that
+nine identical runs spanned 24k-51k lines/sec and three significant figures
+would be measuring the machine's mood. It was quoting cost as a point figure
+from one run. Same standard, different number, and the stricter one was being
+applied to the claim about my laptop rather than the claim about money.
+
+So: a second full batch.
+
+```
+run 1   8,288 in · 3,376 out · 22,423 thinking · $0.1941 per 100 records
+run 2   8,288 in · 3,445 out · 22,087 thinking · $0.1922 per 100 records
+```
+
+1.0% apart. The input tokens are identical to the token, because the prompts are
+built deterministically from the engine's own findings; all the variation is in
+how long the model chose to think. Thinking share held at 86.9% and 86.5%.
+
+The figure is quoted as a range now. It could have gone the other way -- two
+runs 30% apart would have meant the single number was never publishable -- and
+the point of running it was not knowing which. Both runs are committed.
