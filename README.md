@@ -59,7 +59,7 @@ offline from a fresh clone and prints clean.
 | Match rate | 84.9% | 50.0% (compound defects, outside the classifier's design by construction) |
 | Reason-code accuracy | 100.0% | 100.0%, of which 83.3% exact primary |
 | Unexplained bank rows | 30, all reported | 0 |
-| Throughput | 1,149 lines in ~0.04s; see [`eval/metrics.md`](eval/metrics.md) | |
+| Throughput | 1,149 lines; 24k-51k lines/sec across nine runs, see [`eval/metrics.md`](eval/metrics.md) | |
 
 186 tests. No API key or network required for any of them.
 
@@ -69,6 +69,14 @@ a missed exception is money quietly lost, while an unnecessary one costs review
 time. The two rates have different denominators on purpose — false clears over
 the units that must escalate, false escalates over the units that should
 reconcile. Each is the population its error can occur in.
+
+**84.9% matched and 0.0% falsely escalated are consistent.** The other 15.1% is
+19 settlements that genuinely need a human — a real shortfall, a duplicate bank
+credit, a refund the books do not corroborate — plus 30 bank rows the engine
+could not tie to any payout and reports rather than guesses at. A false escalate
+would be a settlement sent to a human that the answer key says was fine. There
+are none. The engine is not escalating out of caution; it is escalating things
+that are actually wrong.
 
 **The 100% on the main set is a regression guard, not a result.** I wrote the
 defect generator and I wrote the detection rules, so that number measures whether
@@ -152,8 +160,9 @@ narration-resolving model. Before writing the engine I recorded a prediction:
 
 I did not respond by making the data harder so the model would look necessary.
 The narration resolver stays in, gated behind arithmetic, invoked only on genuine
-residue. On the shipped data that residue is zero calls. The model's real value
-is writing the exception notes a human has to act on.
+residue. On the shipped data that residue is empty, so the resolver makes **zero
+calls**. The model's real value is the other subsystem: writing the exception
+notes a human has to act on, which is 19 calls on this batch.
 
 ---
 
@@ -206,8 +215,13 @@ claim is that the fixes generalise across seeds within the same compound
 families. A genuinely independent number needs defect families written by someone
 who has not read `classify.py`.
 
-Three independent audits have since been run against the project. What they found
-and what changed is in [`docs/FAILURE_LOG.md`](docs/FAILURE_LOG.md).
+The project has since been through three structured review passes. All three were
+AI-assisted: an agent was given the repository, no prior context, and a written
+brief, and I verified each finding myself before acting on it. They are not
+independent audits by a person, and the number of defects they found is the
+reason this section exists rather than evidence that the engine is sound. What
+each one found, and what changed, is in
+[`docs/FAILURE_LOG.md`](docs/FAILURE_LOG.md).
 
 ---
 
@@ -280,12 +294,16 @@ they are supposed to move.
 
 `--llm-stub` drives the same code path with a scripted client that misbehaves on
 purpose: `honest`, `hallucinating`, `overreaching`, `failing`, `refusing`,
-`truncated`, `plausible`. Whatever the model does, the set of settlements
-escalated to a human does not shrink and no verdict moves. `hallucinating` is the
-one to run if you want to watch the guard work. `overreaching` and `plausible`
-act on the resolver, which the shipped data never invokes, so on this dataset
-they produce output identical to `honest`; they are exercised by tests that build
-their own ambiguous fixtures.
+`truncated`, `plausible`.
+
+**The invariant: whatever the model does — lies, overreaches, dies, refuses,
+gets truncated, or answers entirely plausibly — the set of settlements escalated
+to a human does not shrink, and no verdict moves.**
+
+`hallucinating` is the one to run if you want to watch the guard work.
+`overreaching` and `plausible` act on the resolver, which the shipped data never
+invokes, so on this dataset they produce output identical to `honest`. Both are
+exercised by tests that build their own ambiguous fixtures.
 
 ### What a real run measured
 
@@ -382,6 +400,6 @@ docs/GLOSSARY.md       the domain terms, in plain language
 
 - [`eval/metrics.md`](eval/metrics.md) — full results, per class, with caveats
 - [`docs/FAILURE_LOG.md`](docs/FAILURE_LOG.md) — what broke, in order, including
-  three independent audits and what each one found
+  three AI-assisted review passes and what each one found
 - [`docs/GLOSSARY.md`](docs/GLOSSARY.md) — UTR, settlement, paise, subset-sum
 - [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) — the full list

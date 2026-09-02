@@ -254,7 +254,7 @@ trivially safe and completely useless, and mine was quietly drifting that way.
 
 ---
 
-## Day 5 — an independent audit
+## Day 5 — a review pass (AI-assisted)
 
 I wrote a deliberately adversarial prompt and gave it to an agent with no
 context on the project and no stake in it: verify every claim against the code,
@@ -487,7 +487,7 @@ it entirely, and not one verdict moves.
 
 ## Day 7
 
-A third independent audit, run with a prompt that told it the easy findings were
+A third review pass, again AI-assisted, run with a brief that told the agent the easy findings were
 gone and that its value was in the fixes themselves. It was right to be told
 that: eleven of the fifteen mutants it found surviving were fixes applied in the
 previous two days, each written under deadline, reviewed once, and shipped
