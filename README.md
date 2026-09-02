@@ -310,60 +310,67 @@ exercised by tests that build their own ambiguous fixtures.
 Measured against Gemini. No Anthropic key was available, so that backend has
 never met a live API and is exercised only by the scripted stub.
 
-The whole live record is three calls across two runs, both against
-`gemini-3.5-flash`, committed at [`out/agent.json`](out/agent.json) and
-[`out/agent-second-run.json`](out/agent-second-run.json) so the arithmetic is
-checkable:
+The full batch has now been run end to end against `gemini-3.5-flash`: all 126
+settlements, 19 exceptions, 19 calls, nothing capped. Committed at
+[`out/agent.json`](out/agent.json) so the arithmetic is checkable.
 
 ```
-run 1   885 input · 337 output · 2,308 thinking tokens · $0.025133
-run 2   410 input · 160 output · 1,280 thinking tokens · $0.013575
+8,288 input · 3,376 output · 22,423 thinking tokens · $0.2446 · 264s
+19 of 19 notes accepted · 0 guard rejections · 0 errors · 0 rate limits
 ```
 
+- **$0.1941 per 100 records, measured.** This section used to say a full
+  batch's cost was unknown, because every run had been capped and
+  `per_n_records` refuses to scale one. It is not unknown any more. An earlier
+  draft published `$0.1895` here as "the real figure"; that was
+  `$0.0199 x 19/2`, an extrapolation wearing a measurement's clothes. It turned
+  out to be **2.4% from the measured value** — which changes nothing about
+  whether it should have been published. A guess that lands close is still a
+  guess, and the reader had no way to tell which they were reading.
 - **Thinking tokens are 87% of the output and 83% of the bill, and appear
   nowhere in the reply.** Gemini reasons before answering; that reasoning is
   billed at the output rate and is absent from `total_output_tokens`. Counting
-  only output tokens understated run 1 by **5.8×**. The second run is an
-  independent check on the same finding and agrees: 88.9% of output, 6.6×.
+  only output tokens understates this batch by **5.7×**. The figure has now held
+  across four independent runs of 1, 2, 3 and 19 calls: 88.9%, 87.3%, 85.3%,
+  86.9%.
+- **The guard rejected nothing, and that is the result of a fix.** 0 of 19.
+  Six of those notes are `LEDGER_MISMATCH`, the class whose notes the guard was
+  rejecting that same morning because the order ledger's values were missing
+  from its allowed set (below). Before that fix roughly a third of this batch
+  would have been thrown away and the rejection rate would have read as
+  diligence.
+- **Pacing held.** 13.9 seconds per call, 4.3 requests a minute against a
+  free-tier limit of 5, and not one 429 across 19 calls. The interval was 3.5s
+  until the limits were read off the dashboard rather than inferred from an
+  error message — 17 requests a minute against a limit of 5, which no run had
+  been long enough to expose.
+- **A smaller complete batch, for comparison.** 25 settlements, 3 exceptions,
+  `$0.1442 per 100 records`
+  ([`out/agent-small-batch.json`](out/agent-small-batch.json)). Lower because
+  that batch has a 12% exception rate against the main set's 15%, which is the
+  reason a per-100-records figure from one dataset does not transfer to another.
 - **The default model was changed to the one that answers.** It was
-  `gemini-3.7-flash`, which is newer and half the price. Every request to it
-  timed out — roughly eighteen of them, starting from a fresh daily quota, so
-  the cause was not the daily cap. A controlled retry with one variable changed
-  had 3.5 Flash answer in seconds while 3.7 hit the client timeout, so the
-  default is now the model this project has actually got answers from. 3.7
-  stays available through `--model`.
-
-  **Why it timed out is not established.** The obvious next test — one call at a
-  five-minute ceiling, to separate "slow" from "not answering" — was run and is
-  inconclusive, because by then 3.7's daily quota was spent and an exhausted
-  call fails whatever its latency. So the honest statement is that 3.7 Flash did
-  not answer this client within 90 seconds, eighteen times, and that the reason
-  is unknown. It is not a claim about the model. Note also that the timed-out
-  requests counted against the quota: they reached Google and never came back,
-  and a client-side timeout does not refund one.
-- **One complete batch has been run, on a smaller dataset.** The free tier is
-  5 requests a minute and 20 a day, so a 19-call batch fits — but only with
-  correct pacing, and that took a while to get right (below). A 25-settlement
-  batch has 3 exceptions: every exception narrated, nothing capped,
-  `$0.1442 per 100 records` **measured** rather than extrapolated
-  ([`out/agent-full-batch.json`](out/agent-full-batch.json)). Read it as what it
-  is — that batch has a 12% exception rate against the main set's 15%, so it is
-  a complete measurement of a real batch, not a prediction about a bigger one.
-  For the 126-settlement batch, `per_n_records` still refuses to scale a capped
-  run and this section still quotes no figure.
-- **The guard caught a live model, on the third note it ever checked.** Not the
-  scripted stub — `gemini-3.5-flash`, writing a real exception note, quoting a
-  real ledger value. The whole note was rejected, and the deterministic text
-  stood. See below: the guard was wrong, and finding that out is the reason to
-  run the thing rather than describe it.
+  `gemini-3.7-flash`, which is newer and half the price. Roughly eighteen
+  requests to it timed out, starting from a fresh daily quota, so the cause was
+  not the daily cap. A controlled retry with one variable changed had 3.5 Flash
+  answer in seconds while 3.7 hit the client timeout. **Why it timed out is not
+  established** — the test that would separate "slow" from "not answering" needs
+  a longer ceiling and a quota that was, at the time, spent. So: this client did
+  not get an answer from 3.7 Flash within 90 seconds, eighteen times, and the
+  reason is unknown. That is an observation, not a claim about the model, and it
+  is enough to justify defaulting to the one that answers. 3.7 stays available
+  through `--model`. Note that timed-out requests still counted against the
+  quota: they reached Google and never came back.
 
 The same batch reconciles in 0.04 seconds with zero model calls and identical
 verdicts.
 
 #### What running it actually taught
 
-The rejection above was a **false positive**, and it is the most useful thing
-any model call has produced here.
+Earlier the same day, a 3-call batch rejected 1 of 3 notes with
+`invented_figure:2748.78`. That looked like the guard catching a live model. It
+was a **false positive**, and it is the most useful thing any model call has
+produced here.
 
 `narrate._facts` puts the engine's own finding in the prompt: *"largest is
 order_U40W9CGY3T0514 booked at Rs 2,154.63 against a ledger value of
@@ -380,7 +387,9 @@ the general rule that covers this and the earlier version of the same bug, where
 `Rs 0.00` was excluded and the guard rejected the truest sentence in the report.
 
 Both directions are pinned by tests: the engine's own explanation must pass, and
-a figure from nowhere must still be rejected.
+a figure from nowhere must still be rejected. The full batch run afterwards
+rejected 0 of 19, six of which were `LEDGER_MISMATCH` notes — the ones that
+would have been thrown away before the fix.
 
 Cost is reported only for a model whose price has been read, and only when the
 whole batch ran. An unpriced model prints no figure, because `$0.0000` reads as

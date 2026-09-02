@@ -122,12 +122,19 @@ def main() -> int:
                 "      The README cites this file as its only live API "
                 "evidence.\n"
                 "      Restore the real run, or delete the claim.")
+        per100 = (u.get("per_100_records") or {}).get("usd")
         for label, pattern, actual in (
-            ("model", r"\(`(gemini-[\d.]+-flash)`\)", str(u.get("model"))),
+            ("model", r"`(gemini-[\d.]+-flash)`", str(u.get("model"))),
             ("input tokens", r"([\d,]+) input", str(u.get("input_tokens"))),
             ("output tokens", r"([\d,]+) output", str(u.get("output_tokens"))),
             ("thinking tokens", r"([\d,]+) thinking",
              str(u.get("thought_tokens"))),
+            # The cost per 100 records is the claim this section exists to make,
+            # and the one an earlier draft got wrong by publishing an
+            # extrapolation as a measurement. It is checked against the file.
+            ("cost per 100 records", r"\$(0\.\d+) per 100 records",
+             f"{per100:.4f}" if per100 else "(not reported)"),
+            ("calls", r"(\d+) of \1 notes accepted", str(u.get("calls"))),
         ):
             m = re.search(pattern, readme)
             if m:

@@ -778,3 +778,49 @@ at 18/20 when I proposed it; I did not think about whether 2 remaining calls
 could carry the question. A test that cannot distinguish its two outcomes is not
 a test, which is the same lesson this log already records about tests over paths
 that cannot execute -- this time about an experiment rather than an assertion.
+
+### The full batch, finally, and what the numbers say
+
+126 settlements, 19 exceptions, 19 calls, `gemini-3.5-flash`, nothing capped:
+
+```
+8,288 input · 3,376 output · 22,423 thinking tokens · $0.2446 · 264s
+19 of 19 notes accepted · 0 guard rejections · 0 errors · 0 rate limits
+$0.1941 per 100 records
+```
+
+Four things this settles.
+
+**The cost is measured now.** For a week this section said a full batch's cost
+was unknown, because every run was capped and `per_n_records` refuses to scale
+one. It is $0.1941 per 100 records.
+
+**The extrapolation I removed was 2.4% off.** An earlier draft published
+`$0.1895` as "the real figure". It was `$0.0199 x 19/2` -- the arithmetic
+`per_n_records` exists to refuse, done by hand -- and a third audit called it
+the single thing most likely to sink the submission. It was also, as it turns
+out, nearly right.
+
+That is worth sitting with, because the instinct is to feel vindicated. The
+number being close does not make publishing it correct. The reader had no way to
+tell an extrapolation from a measurement, and the same method applied to a
+different batch could have been off by any amount -- the smaller 25-settlement
+batch measures $0.1442, a 26% difference, purely because its exception rate
+differs. A guess that lands near the answer is still a guess. What made the
+original wrong was never the value.
+
+**The guard rejected nothing, and that is a fix showing up.** 0 of 19, and six
+of those notes are `LEDGER_MISMATCH` -- the class whose notes the guard was
+rejecting that same morning, because the order ledger's own values were missing
+from the allowed set. Before the fix roughly a third of this batch would have
+been discarded, and a 32% rejection rate would have read as the guard working
+hard rather than as the guard being wrong.
+
+**The pacing fix held at scale.** 13.9 seconds per call, 4.3 requests a minute
+against a limit of 5, not one 429 in 19 calls. The interval was 3.5s -- 17 a
+minute against a limit of 5 -- until the limits were read off the dashboard
+instead of inferred from an error message. No previous run was long enough to
+expose it.
+
+Every one of those four is a fix made in the last two days, and none of them
+could have been verified without running the thing.
