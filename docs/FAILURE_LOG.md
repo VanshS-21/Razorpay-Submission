@@ -859,3 +859,31 @@ a plausible cause, it fitted every observation I had, and I stated it. What was
 missing was the one experiment that could have falsified it -- and when that
 experiment was finally cheap to run, it took one call and 25 seconds to
 overturn a claim that had been sitting in three files for a day.
+
+### The pacing was right within a run and wrong across runs
+
+After the full batch the dashboard showed 3.5 Flash at **6 requests a minute
+against a limit of 5**, in red, on a run paced at 12.5 seconds. No 429s came
+back, so nothing in the run knew.
+
+A fixed sleep between calls bounds the gap between consecutive requests. That is
+only the same thing as bounding a sliding window if the window starts where the
+run does. It does not: `_last_call` began at zero in every new process, so the
+limiter had no memory of the run before it, and three runs went out within a few
+minutes of each other. Inside a single run the arithmetic was correct and the
+answer was still wrong.
+
+It is a real window now -- no more than SAFE_RPM requests in any 60 seconds,
+plus a minimum gap -- and SAFE_RPM is one below the published limit, because
+4.8 a minute in theory was 6 in practice and a limiter aimed exactly at the
+limit is wrong whenever anything jitters. Still per-process: two runs started
+seconds apart will each believe the window is empty. Fixing that needs state on
+disk, which is not worth it here; saying so is.
+
+The test for it survived its own mutation on the first attempt. It asserted
+`worst <= SAFE_RPM`, which passes for any value of SAFE_RPM including one raised
+to the limit itself -- the assertion moved with the change it existed to catch.
+It is pinned against the published limit now. That is the fifth time in this
+project a test has been written over something it could not observe, and the
+second time in two days that I have done it inside the file whose entire purpose
+is to catch that mistake.

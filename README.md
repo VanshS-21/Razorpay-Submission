@@ -61,7 +61,7 @@ offline from a fresh clone and prints clean.
 | Unexplained bank rows | 30, all reported | 0 |
 | Throughput | 1,149 lines; 24k-51k lines/sec across nine runs, see [`eval/metrics.md`](eval/metrics.md) | |
 
-193 tests. No API key or network required for any of them.
+194 tests. No API key or network required for any of them.
 
 **Read the false-clear rate first.** It counts settlements the engine called
 reconciled that the answer key says needed a human. That is the expensive error:
@@ -251,7 +251,7 @@ python demo.py                      # everything, one command
 open out/report.html                # visual report, self-contained and offline
 
 pip install -e ".[dev]"             # adds pytest
-python -m pytest tests/ -q          # 193 tests
+python -m pytest tests/ -q          # 194 tests
 python eval/run_eval.py             # regenerate eval/metrics.md
 python eval/check_claims.py         # verify this README against a live run
 ```
@@ -339,11 +339,14 @@ settlements, 19 exceptions, 19 calls, nothing capped. Committed at
   from its allowed set (below). Before that fix roughly a third of this batch
   would have been thrown away and the rejection rate would have read as
   diligence.
-- **Pacing held.** 13.9 seconds per call, 4.3 requests a minute against a
-  free-tier limit of 5, and not one 429 across 19 calls. The interval was 3.5s
-  until the limits were read off the dashboard rather than inferred from an
-  error message — 17 requests a minute against a limit of 5, which no run had
-  been long enough to expose.
+- **Pacing held, and was still not right.** 13.9 seconds per call, 4.3
+  requests a minute, not one 429 across 19 calls. The provider's dashboard
+  nonetheless reported a peak of **6 a minute against a limit of 5**, because a
+  fixed sleep between calls bounds the gap between consecutive requests and not
+  a sliding window — and the limiter began each process with no memory of the
+  run before it, while three runs went out minutes apart. It is a real window
+  now, capped one below the limit, because a limiter with no margin is wrong the
+  moment anything jitters.
 - **A smaller complete batch, for comparison.** 25 settlements, 3 exceptions,
   `$0.1442 per 100 records`
   ([`out/agent-small-batch.json`](out/agent-small-batch.json)). Lower because

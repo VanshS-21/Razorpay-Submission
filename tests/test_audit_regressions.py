@@ -804,3 +804,53 @@ def test_a_batch_that_lost_calls_is_not_reported_as_complete():
     clean.successes = 19
     assert clean.to_dict(126, complete=True)["batch_complete"] is True
     assert clean.per_n_records(126, complete=True)
+
+
+def test_the_pacing_never_exceeds_the_rate_limit_in_any_window():
+    """A fixed sleep between calls does not bound a sliding window.
+
+    A 19-call batch paced at 12.5s reported a peak of 6 requests a minute
+    against a limit of 5 on the provider's dashboard, in red, having produced
+    no 429s. Within one run the arithmetic was right; the limiter simply had no
+    memory of the run before it, and three runs went out minutes apart.
+
+    Time is mocked, so this checks the schedule the limiter produces rather
+    than waiting for it.
+    """
+    clock = [0.0]
+    sent = []
+
+    def monotonic():
+        return clock[0]
+
+    def sleep(s):
+        clock[0] += s
+
+    backend = llm.GeminiBackend(object())
+    with mock.patch.object(llm.time, "monotonic", monotonic), \
+         mock.patch.object(llm.time, "sleep", sleep):
+        for _ in range(19):
+            backend._pace()
+            sent.append(clock[0])
+            clock[0] += 0.4          # the request itself takes a moment
+
+    worst = 0
+    for i, t in enumerate(sent):
+        inside = sum(1 for u in sent if t - llm.RATE_WINDOW_S < u <= t)
+        worst = max(worst, inside)
+    assert worst <= llm.GEMINI_FREE_RPM, (
+        f"{worst} requests landed inside one {llm.RATE_WINDOW_S:.0f}s window "
+        f"against a limit of {llm.GEMINI_FREE_RPM}")
+    # Pinned against the LIMIT, not against SAFE_RPM. Asserting `worst <=
+    # SAFE_RPM` passes for any SAFE_RPM, including one raised to the limit
+    # itself -- the assertion moves with the mutation it exists to catch. That
+    # is the same trap as a test over a path that cannot execute, and it
+    # survived the first mutation run of this very test.
+    assert llm.SAFE_RPM < llm.GEMINI_FREE_RPM, (
+        "the limiter targets the limit exactly, leaving no margin for the "
+        "jitter that already produced a 6/5 peak")
+    assert worst < llm.GEMINI_FREE_RPM, (
+        f"{worst} requests in a window against a limit of "
+        f"{llm.GEMINI_FREE_RPM}: no headroom")
+    gaps = [b - a for a, b in zip(sent, sent[1:])]
+    assert min(gaps) >= llm.GEMINI_MIN_INTERVAL - 0.01

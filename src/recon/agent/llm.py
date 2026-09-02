@@ -23,6 +23,7 @@ import json
 import os
 import re
 import time
+from collections import deque
 from dataclasses import dataclass
 
 #: USD per million tokens.
@@ -108,6 +109,14 @@ GEMINI_FREE_RPD = 20
 #: from the sixth onward -- and the module would have swallowed them into
 #: "0 notes accepted" and reported it as though the model had declined to help.
 GEMINI_MIN_INTERVAL = float(os.environ.get("RECON_GEMINI_INTERVAL", "12.5"))
+
+#: The window the per-minute limit is measured over, and how many requests this
+#: client will put inside one. SAFE_RPM is deliberately below GEMINI_FREE_RPM:
+#: the provider's dashboard reported a peak of 6/5 during a run paced at 12.5s,
+#: so 4.8 requests a minute in theory was 6 in practice, and a limiter with no
+#: margin is a limiter that is wrong whenever anything jitters.
+RATE_WINDOW_S = 60.0
+SAFE_RPM = max(1, GEMINI_FREE_RPM - 1)
 
 #: How many times to wait and try again when the API says "not yet".
 #: A 429 is not a refusal, it is a request to slow down, and counting it as an
@@ -373,6 +382,8 @@ class GeminiBackend(Backend):
     def __init__(self, client):
         self.client = client
         self._last_call = 0.0
+        #: Monotonic timestamps of requests sent inside the current window.
+        self._sent: deque[float] = deque()
         #: Consecutive calls that exhausted every retry and were still rate
         #: limited. Once the quota is gone it stays gone, and continuing to ask
         #: only converts a fast failure into a slow one.
@@ -411,14 +422,52 @@ class GeminiBackend(Backend):
                 f"quota is most likely spent for the day.")
         return None
 
+    def _pace(self):
+        """Hold the request rate under the free-tier limit.
+
+        A fixed sleep between calls does not bound a sliding window. It bounds
+        the gap between consecutive requests, which is the same thing only if
+        every request takes the same time and the window starts where the run
+        does. Neither holds: a 19-call batch paced at 12.5s reported a peak of
+        6 requests a minute against a limit of 5 on the provider's own
+        dashboard, in red, having produced no 429s at all.
+
+        The gap is that `_last_call` began at zero in each new process, so the
+        limiter had no memory of the run before it -- and three runs went out
+        within a few minutes of each other. Within one run the arithmetic was
+        right and the answer was still wrong.
+
+        So: an actual window. No more than SAFE_RPM requests in any
+        RATE_WINDOW_S, plus a minimum gap so a burst of allowed requests does
+        not all leave at once. Still per-process, and that limitation is real --
+        two runs started seconds apart will each believe the window is empty.
+        Nothing short of state on disk fixes that, and it is not worth state on
+        disk here; what it is worth is not claiming otherwise.
+        """
+        if GEMINI_MIN_INTERVAL <= 0:
+            # Pacing off, explicitly. A paid tier has no such limit, and the
+            # tests that drive nineteen calls in a loop must not wait a minute
+            # between them. Setting RECON_GEMINI_INTERVAL=0 disables both the
+            # gap and the window.
+            self._last_call = time.monotonic()
+            return
+        while True:
+            now = time.monotonic()
+            while self._sent and now - self._sent[0] >= RATE_WINDOW_S:
+                self._sent.popleft()
+            if len(self._sent) < SAFE_RPM:
+                break
+            time.sleep(max(0.0, RATE_WINDOW_S - (now - self._sent[0])) + 0.25)
+
+        gap = GEMINI_MIN_INTERVAL - (now - self._last_call)
+        if gap > 0:
+            time.sleep(gap)
+        self._last_call = time.monotonic()
+        self._sent.append(self._last_call)
+
     def _attempt(self, model, system, prompt, schema, usage, max_tokens,
                  attempt=0, last=False):
-        # Free-tier pacing, so most calls never hit the limit in the first
-        # place. The retry above is the safety net, not the strategy.
-        wait = GEMINI_MIN_INTERVAL - (time.monotonic() - self._last_call)
-        if wait > 0:
-            time.sleep(wait)
-        self._last_call = time.monotonic()
+        self._pace()
 
         try:
             r = self.client.interactions.create(
