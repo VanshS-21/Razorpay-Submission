@@ -627,9 +627,13 @@ def build_client(provider: str | None = None) -> Backend:
             return AnthropicBackend(anthropic.AnthropicBedrock())
         except Exception as e:
             raise LLMUnavailable(
-                f"could not construct a Bedrock client ({e}). Check that "
-                f"AWS credentials and AWS_REGION are set, and that model "
-                f"access is enabled in the Bedrock console.") from e
+                f"could not construct a Bedrock client ({e}). Check that AWS "
+                f"credentials and AWS_REGION are set.\n"
+                f"Serverless models now enable themselves on first invoke, so "
+                f"there is no access page to visit -- but Anthropic models may "
+                f"ask a first-time account for use-case details, and that "
+                f"arrives as AccessDeniedException on the first call rather "
+                f"than as a setup step.") from e
 
     if provider == "gemini":
         try:
