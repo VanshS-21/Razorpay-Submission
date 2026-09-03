@@ -1,0 +1,43 @@
+{
+  "model": "us.amazon.nova-2-lite-v1:0",
+  "provider": "bedrock",
+  "is_stub": false,
+  "proposals": [],
+  "matches_proposed": 0,
+  "narrations_accepted": 19,
+  "seconds": 26.527,
+  "exceptions_total": 19,
+  "usage": {
+    "batch_complete": true,
+    "uncapped_by_operator": true,
+    "usd_per_note": 0.00076,
+    "usd_per_call": 0.00076,
+    "model": "us.amazon.nova-2-lite-v1:0",
+    "calls": 19,
+    "successes": 19,
+    "errors": 0,
+    "skipped": 0,
+    "gave_up": "",
+    "throttled": 0,
+    "input_tokens": 24857,
+    "output_tokens": 2793,
+    "thought_tokens": 0,
+    "billable_output_tokens": 2793,
+    "cache_read_tokens": 0,
+    "price_known": true,
+    "usd_total": 0.01444,
+    "inr_total": 1.2707,
+    "per_100_records": {
+      "usd": 0.01146,
+      "inr": 1.0085,
+      "input_tokens": 19728,
+      "output_tokens": 2217
+    }
+  },
+  "guard": {
+    "checked": 19,
+    "rejected": 0,
+    "rejection_rate": 0.0,
+    "reasons": {}
+  }
+}

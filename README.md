@@ -289,11 +289,13 @@ jq '.findings[]|{settlement_id,disposition,reason_code,delta}' out/run.json
 only `explanation`, `action_required` and `resolved_by`, and no path re-enters
 the classifier.
 
-It has now been run against **two vendors and three live models** on the same
+It has now been run against **two vendors and four live models** on the same
 126-settlement dataset — `gemini-3.5-flash` and `gemini-3.7-flash` on Google,
-and `amazon.nova-lite-v1:0` on AWS Bedrock ([`out/agent.json`](out/agent.json),
+`amazon.nova-lite-v1:0` and `amazon.nova-2-lite-v1:0` on AWS Bedrock
+([`out/agent.json`](out/agent.json),
 [`out/agent-second-model.json`](out/agent-second-model.json),
-[`out/agent-bedrock-nova.json`](out/agent-bedrock-nova.json)):
+[`out/agent-bedrock-nova.json`](out/agent-bedrock-nova.json),
+[`out/agent-bedrock-nova2.json`](out/agent-bedrock-nova2.json)):
 
 ```
 verdict fields compared (disposition, reason_code, delta, utr):  504
@@ -310,32 +312,43 @@ note, the other wrote almost none, and the reconciliation came out identical. A
 model layer that can fail that badly without moving a verdict is the claim,
 demonstrated rather than asserted.
 
-**The Bedrock run crosses a real vendor boundary**, not just a model one:
+**The Bedrock runs cross a real vendor boundary**, not just a model one:
 another company, another SDK, another wire protocol, and a different mechanism
 for structured output — `converse` has no schema parameter, so the schema is
 declared as a tool the model is forced to call and the arguments come back
-parsed. Nova Lite is also a far smaller model than either frontier model above,
-which makes it the first genuine test the guard has had; it rejected 0 of 19.
+parsed. Both Nova models are far smaller than either frontier model above,
+which makes them the first genuine test the guard has had. It rejected 0 of 19
+on each.
 
 The transport shows up in the token profile, and only a real run reveals it:
 
-| | gemini-3.5-flash | nova-lite (Bedrock) |
-|---|---|---|
-| input tokens | 8,288 | 16,517 |
-| output tokens | 3,376 | 2,264 |
-| thinking tokens | 22,423 | 0 |
-| wall clock, 19 calls | 264s | 23.5s |
+| | gemini-3.5-flash | nova-lite-v1 | nova-2-lite |
+|---|---|---|---|
+| input tokens | 8,288 | 16,517 | 24,857 |
+| output tokens | 3,376 | 2,264 | 2,793 |
+| thinking tokens | 22,423 | 0 | 0 |
+| wall clock, 19 calls | 264s | 23.5s | 25.7s |
+| cost per 100 records | $0.192–$0.194 | *(price not read)* | **$0.0115** |
 
-Input **doubles** because `converse` ships the full JSON schema inside a tool
-definition on every call, where Gemini carries it in the request config. That is
-a property of the transport rather than the model. The wall-clock gap is not a
-speed comparison either — the Gemini figure is mostly deliberate pacing against
-a 5-requests-per-minute free tier.
+Input **doubles and then triples** because `converse` ships the full JSON schema
+inside a tool definition on every call, where Gemini carries it in the request
+config. That is a property of the transport rather than the model. The
+wall-clock gap is not a speed comparison either — the Gemini figure is mostly
+deliberate pacing against a 5-requests-per-minute free tier.
 
-No cost is quoted for the Bedrock run. `PRICING` lists only models whose prices
-have been read, and Amazon's pricing pages did not yield a figure that could be
-confirmed for this region, so the run reports tokens and no dollar amount. An
-unknown price is reported as unknown.
+**Nova 2 Lite reconciles the same batch for about 1/17th of the price**
+(~Rs 1.01 per 100 records against ~Rs 16.9), for verdicts that are identical to
+the token. Most of that gap is thinking: Gemini spends 87% of its output tokens
+reasoning before it writes, and the Nova models do not reason at all. Whether
+that reasoning buys anything here is not something this project measured — what
+it can say is that the arithmetic did not need it.
+
+`nova-lite-v1` shows no cost because no price for it has been read. `PRICING`
+lists only prices actually read off a vendor's page, and the first figure found
+for these models was for the wrong model (`Nova 2 Lite`, not `Nova Lite`) in the
+wrong region (Ohio, not N. Virginia) — an authoritative page showing neither the
+model nor the region being priced. An unknown price is reported as unknown
+rather than assumed from a neighbour.
 
 Anthropic's own models were tried on Bedrock first and refused: the
 Marketplace-served ones return `INVALID_PAYMENT_INSTRUMENT` on an account

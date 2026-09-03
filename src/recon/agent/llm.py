@@ -42,6 +42,19 @@ PRICING = {
     # Gemini 3.7 Flash is promotional until 31 Dec 2026; it doubles on 1 Jan.
     "gemini-3.7-flash": {"in": 0.75, "out": 3.75},
     "gemini-3.5-flash": {"in": 1.50, "out": 9.00},
+    # Amazon Nova 2 Lite, read off aws.amazon.com/nova/pricing/ with the region
+    # selector on US East (N. Virginia) -- the region these runs were measured
+    # in. The key is the inference profile id exactly as invoked, because that
+    # is the string Usage.model holds. A eu./apac. profile is a different price
+    # and is deliberately absent rather than assumed equal.
+    #
+    # The first figure read for this was $0.30/$2.50 for "Amazon Nova 2 Lite"
+    # with the selector on US East (OHIO), against a batch run in N. Virginia
+    # -- and the batch before it ran on `nova-lite-v1`, a different model
+    # entirely whose price is roughly 5x lower. Two mismatches, on a page that
+    # is authoritative and was showing neither the model nor the region being
+    # priced. `nova-lite-v1` therefore has no entry and reports no cost.
+    "us.amazon.nova-2-lite-v1:0": {"in": 0.30, "out": 2.50},
 }
 
 #: Default model per vendor.
