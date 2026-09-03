@@ -60,6 +60,7 @@ offline from a fresh clone and prints clean.
 | Reason-code accuracy | 100.0% | 100.0%, of which 83.3% exact primary |
 | Unexplained bank rows | 30, all reported | 0 |
 | Throughput | 1,149 lines; 24k-51k lines/sec across nine runs, see [`eval/metrics.md`](eval/metrics.md) | |
+| **Verdicts moved by the model** | **0** of 504 fields, across 4 live models on 2 vendors | |
 
 202 tests. No API key or network required for any of them.
 
@@ -367,8 +368,8 @@ exercised by tests that build their own ambiguous fixtures.
 
 ### What a real run measured
 
-Measured against Gemini. No Anthropic key was available, so that backend has
-never met a live API and is exercised only by the scripted stub.
+Measured against Google and AWS. Anthropic's own backend has never met a live
+API and is exercised only by the scripted stub.
 
 The full batch has now been run end to end against `gemini-3.5-flash`: all 126
 settlements, 19 exceptions, 19 calls, nothing capped. Committed at
@@ -381,99 +382,37 @@ run 2   8,288 input · 3,445 output · 22,087 thinking · $0.2422 · $0.1922 per
 both runs: 19 of 19 notes accepted · 0 guard rejections · 0 errors · 0 rate limits
 ```
 
-- **$0.192–$0.194 per 100 records, across two full batches.** This section used
-  to say a full batch's cost was unknown, because every run had been capped and
-  `per_n_records` refuses to scale one. It is measured now, and measured twice,
-  because this file refuses to quote throughput as a single figure and owed the
-  same standard to a number about money. The two runs differ by 1.0%: the
-  prompts are deterministic, so the input tokens are identical to the token, and
-  the variation is entirely in how long the model chose to think.
-
-  An earlier draft published `$0.1895` here as "the real figure". That was
-  `$0.0199 x 19/2`, an extrapolation wearing a measurement's clothes, and it
-  landed **2.4% from the measured value** — which changes nothing about whether
-  it should have been published. A guess that lands close is still a guess, and
-  the reader had no way to tell which they were reading.
+- **$0.192–$0.194 per 100 records, across two full batches.** The two runs
+  differ by 1.0%: prompts are built deterministically, so input tokens are
+  identical to the token and the variation is entirely in how long the model
+  chose to think. An earlier draft published `$0.1895` here as "the real
+  figure"; it was an extrapolation from a 2-call run, and it landed 2.4% from
+  the measured value, which changes nothing about whether it should have been
+  published.
 - **Thinking tokens are 87% of the output and 83% of the bill, and appear
   nowhere in the reply.** Gemini reasons before answering; that reasoning is
   billed at the output rate and is absent from `total_output_tokens`. Counting
-  only output tokens understates this batch by **5.7×**. The figure has now held
-  across five independent runs of 1, 2, 3, 19 and 19 calls: 88.9%, 87.3%, 85.3%,
-  86.9%, 86.5%.
-- **The guard rejected nothing, and that is the result of a fix.** 0 of 19.
-  Six of those notes are `LEDGER_MISMATCH`, the class whose notes the guard was
-  rejecting that same morning because the order ledger's values were missing
-  from its allowed set (below). Before that fix roughly a third of this batch
-  would have been thrown away and the rejection rate would have read as
-  diligence.
-- **Pacing held, and was still not right.** 13.9 seconds per call, 4.3
-  requests a minute, not one 429 across 19 calls. The provider's dashboard
-  nonetheless reported a peak of **6 a minute against a limit of 5**, because a
-  fixed sleep between calls bounds the gap between consecutive requests and not
-  a sliding window — and the limiter began each process with no memory of the
-  run before it, while three runs went out minutes apart. It is a real window
-  now, capped one below the limit, because a limiter with no margin is wrong the
-  moment anything jitters.
+  only output tokens understates this batch by **5.7×**. Held across five runs
+  of 1, 2, 3, 19 and 19 calls: 88.9%, 87.3%, 85.3%, 86.9%, 86.5%.
+- **The guard rejected nothing.** 0 of 19 here, and 0 of 19 on each Nova run.
+  The one rejection this project has ever seen was a false positive caused by a
+  bug in the guard's own allowed-set — the most useful thing any model call has
+  produced here, written up in
+  [`docs/FAILURE_LOG.md`](docs/FAILURE_LOG.md#the-findings-that-mattered).
 - **A smaller complete batch, for comparison.** 25 settlements, 3 exceptions,
   `$0.1442 per 100 records`
   ([`out/agent-small-batch.json`](out/agent-small-batch.json)). Lower because
-  that batch has a 12% exception rate against the main set's 15%, which is the
-  reason a per-100-records figure from one dataset does not transfer to another.
-- **The default model is the one with a consistent record, and the reason is
-  not the one I first gave.** `gemini-3.7-flash` is newer and half the price.
-  Roughly eighteen requests to it timed out at a 90-second ceiling, starting
-  from a fresh daily quota, so the cause was not the daily cap. I wrote that up
-  as the model being slow or not answering. Then it answered in **25.5 seconds**
-  — comfortably inside the ceiling it had been blowing through — with 462 input,
-  205 output and 780 thinking tokens for $0.00404, about 3.4x cheaper per note
-  than 3.5 Flash and using 40% fewer thinking tokens.
-
-  So "3.7 Flash is slow" is ruled out, and why those eighteen requests were
-  never answered is **unknown**. Several things differed between the two
-  attempts — the key, the elapsed time, and the request pacing, which was 3.5s
-  (17 requests a minute against a limit of 5) during the failures and 12.5s
-  during the success. That last one is a plausible contributing factor and is
-  untested; exceeding a per-minute limit ought to produce a 429 rather than
-  silence, so it is a hypothesis rather than an explanation.
-
-  The default stays `gemini-3.5-flash` on track record: 25 calls across four
-  runs, no failures. 3.7 has one success and eighteen unexplained timeouts. It
-  is cheaper and it is available through `--model`, and on this evidence it is
-  worth retrying, but the default should be the one that has never yet failed
-  rather than the one that is cheaper when it works.
+  that batch has a 12% exception rate against the main set's 15%, which is why a
+  per-100-records figure from one dataset does not transfer to another.
+- **The default is `gemini-3.5-flash` on track record**, not on price. 3.7 Flash
+  is newer and cheaper and has answered once, in 25.5 seconds; eighteen other
+  requests to it went unanswered at a 90-second ceiling and **why is unknown**.
+  It stays available through `--model`. The full account, including the two
+  explanations I gave that were wrong, is in
+  [`docs/FAILURE_LOG.md`](docs/FAILURE_LOG.md).
 
 The same batch reconciles in 0.04 seconds with zero model calls and identical
 verdicts.
-
-#### What running it actually taught
-
-Earlier the same day, a 3-call batch rejected 1 of 3 notes with
-`invented_figure:2748.78`. That looked like the guard catching a live model. It
-was a **false positive**, and it is the most useful thing any model call has
-produced here.
-
-`narrate._facts` puts the engine's own finding in the prompt: *"largest is
-order_U40W9CGY3T0514 booked at Rs 2,154.63 against a ledger value of
-Rs 2,748.78."* The model quoted that ledger value back, correctly, in a
-`LEDGER_MISMATCH` note — the class of finding that is *entirely about* comparing
-a settlement line to the order ledger. `allowed_figures_for` built its set from
-settlement lines and bank rows and never included order-ledger values, so the
-system handed the model a number and then rejected it for repeating it.
-
-No stub could have found this. The scripted client cites figures from the facts
-block or an impossible constant; it never quotes a real third-source value. The
-guard now allows every figure the engine states in its own explanation, which is
-the general rule that covers this and the earlier version of the same bug, where
-`Rs 0.00` was excluded and the guard rejected the truest sentence in the report.
-
-Both directions are pinned by tests: the engine's own explanation must pass, and
-a figure from nowhere must still be rejected. The full batch run afterwards
-rejected 0 of 19, six of which were `LEDGER_MISMATCH` notes — the ones that
-would have been thrown away before the fix.
-
-Cost is reported only for a model whose price has been read, and only when the
-whole batch ran. An unpriced model prints no figure, because `$0.0000` reads as
-"free" rather than "unknown".
 
 ---
 

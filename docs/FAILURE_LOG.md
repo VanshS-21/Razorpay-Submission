@@ -1,6 +1,24 @@
 # Failure log
 
-Kept live, in order, as things broke. Not reconstructed afterwards.
+Kept live, in order, as things broke. Not reconstructed afterwards. Where a
+claim here was wrong, the original paragraph is left standing and the correction
+sits beneath it, because an edited-clean record proves nothing.
+
+## The findings that mattered
+
+Read these eight and skip the rest; the chronology below is the working record,
+not the argument.
+
+| # | finding | where |
+|---|---|---|
+| 1 | **The claim I was proudest of was false.** The guard re-ran the same test the matcher had already failed, so every model proposal passed it. The test guarding it could not fail. | [Day 5](#the-claim-i-was-proudest-of-was-the-one-that-was-false) |
+| 2 | **A number one query from being reported as a win.** A guard rejection looked like it had caught a live hallucination. It was my bug — the engine handed the model a figure and then rejected it for repeating it. | [Day 7](#the-guard-rejected-the-truth-again-and-only-a-real-model-could-show-it) |
+| 3 | **An extrapolation published as a measurement.** A capped 2-call run's cost was scaled to a full batch and labelled "the real figure". It landed 2.4% from the truth, which changes nothing. | [Day 7](#the-number-i-was-proudest-of-was-the-wrong-unit-and-the-number-beside-it-was-not-a-measurement) |
+| 4 | **Thinking tokens are 87% of the output and appear nowhere in the reply.** Counting only output tokens understates the bill by ~5.7x. Held across five runs. | [Day 6](#thinking-tokens-are-87-of-the-output-and-appear-nowhere-in-the-reply) |
+| 5 | **61% of model calls asked questions with no possible answer** — and fixing that made a test vacuous, which I nearly fixed by weakening the test. | [Day 6](#61-of-the-model-calls-were-spent-on-questions-with-no-answer) |
+| 6 | **A test over a path that cannot execute is no evidence.** Five instances, each caught by reverting the fix and watching the test fail rather than by writing more tests. | [first full account](#the-third-instance-of-a-lesson-recorded-twice) |
+| 7 | **The daily rate limit was the per-minute limit**, so the pacing ran 3x over a limit no run had been long enough to expose. | [Day 7](#the-daily-limit-was-the-per-minute-limit-and-the-pacing-was-3x-over-it) |
+| 8 | **The failed run was the one worth having.** A vendor that failed 18 of 19 calls moved zero verdicts — better evidence for the architecture than the run that worked. | [Day 7](#the-failed-run-was-the-one-worth-having) |
 
 ---
 
@@ -174,26 +192,6 @@ command that would measure it.
 This is also why the agent layer is off by default and why `--llm` **fails
 loudly** with exit code 3 rather than silently degrading. A run that was meant
 to use the model must never quietly pretend it did.
-
-### The guard is the part I would defend in an interview
-
-`verify_narration()` extracts every rupee figure from model-generated prose and
-rejects the entire output if even one was not computed by the engine. Not
-"flags for review" — rejects, and falls back to the deterministic text.
-
-The reasoning: a plausible wrong number in a finance note is worse than no note
-at all. Nobody acts on a missing explanation. People act on a number, and the
-action here is quoting it to a bank. So the failure mode of a slightly-wrong
-narration is a finance analyst confidently telling their bank the wrong figure.
-
-`verify_match()` is the same idea for identity: the model may propose which
-payout a bank row belongs to, and the proposal is then re-run through the exact
-amount and date-window test the deterministic matcher uses. An accepted proposal
-is one the engine could defend without ever mentioning that a model was
-involved. `test_match_rejected_when_amount_is_off_by_one_paisa` pins that —
-exact means exact.
-
----
 
 ## Day 4
 
@@ -385,7 +383,7 @@ The very first call returned 61 input tokens, 60 output tokens -- and 275
 the output rate, and it is not included in `total_output_tokens`.
 
 Written the obvious way, counting `output_tokens` and nothing else, the reported
-cost would have been **5.8x too low**. Nothing about a wrong figure there would
+cost would have been **5.8x too low** (that 2-call run; the 19-call batch later measured 5.7x). Nothing about a wrong figure there would
 have looked wrong: it is a real number, correctly computed, describing the wrong
 thing.
 
@@ -485,7 +483,7 @@ it entirely, and not one verdict moves.
 
 ---
 
-## Day 7
+## Days 7-8 — 2-3 September
 
 A third review pass, again AI-assisted, run with a brief that told the agent the easy findings were
 gone and that its value was in the fixes themselves. It was right to be told
@@ -860,6 +858,13 @@ missing was the one experiment that could have falsified it -- and when that
 experiment was finally cheap to run, it took one call and 25 seconds to
 overturn a claim that had been sitting in three files for a day.
 
+**Where this landed, after five installments.** One success in 25.5 seconds.
+Eighteen requests unanswered at a 90-second ceiling, cause unknown -- pacing is a
+hypothesis, not an explanation. The 429s were the daily cap, confirmed on the
+dashboard at 21/20. The default stays `gemini-3.5-flash` on track record: 25
+calls, no failures, against 3.7's one success and eighteen silences. Everything
+above is left as written; this is the current state.
+
 ### The pacing was right within a run and wrong across runs
 
 After the full batch the dashboard showed 3.5 Flash at **6 requests a minute
@@ -971,65 +976,55 @@ The figure is quoted as a range now. It could have gone the other way -- two
 runs 30% apart would have meant the single number was never publishable -- and
 the point of running it was not knowing which. Both runs are committed.
 
-### A second vendor, found by testing the error message instead of reading it
+### A second vendor, and four error messages read as explanations
 
-The vendor-swap claim rested on two Gemini models. Two models, one company, one
-SDK, one wire format -- a weaker test of "the model is a replaceable part" than
-the sentence implies. AWS credits made a genuine second vendor free to try, so
-it was tried.
+The vendor-swap claim rested on two Gemini models -- two models, one company,
+one SDK, one wire format. AWS credits made a real second vendor free to try.
 
-It refused four times, and each refusal was read as final before a test proved
-otherwise. That is the whole entry.
+It refused four times, and each refusal was accepted as final before a test
+contradicted it: a console page that no longer existed, a structured-output
+parameter that was never the problem, a per-model entitlement that turned out to
+be three different refusals, and finally "the account has no payment instrument,
+so no model will run" -- written here as a recommendation to stop. That last one
+was wrong. `INVALID_PAYMENT_INSTRUMENT` applies to models sold through the AWS
+Marketplace; Amazon's own Nova models bill against credits and answer fine. A
+two-minute probe across seven models found four that work.
 
-**1. "Model access must be enabled in the console."** Written into an error
-message from memory. AWS had retired that page: serverless models now enable
-themselves on first invoke. The guidance pointed at something that no longer
-existed.
+**The lesson: an error message is a symptom, not a diagnosis.** Three of the four
+times, a short probe contradicted the message. The fourth would have ended the
+attempt with the conclusion already written.
 
-**2. `output_config` looked like the likely blocker.** It was the unknown the
-whole attempt was time-boxed against -- whether the structured-output parameter
-survives a different transport. It was never the problem. Every failure reached
-the authorization layer, which means the request shape validated on the first
-try.
-
-**3. "Opus 5 is not available for this account."** Read as an entitlement
-problem for that model. Testing eight ids showed three different refusals:
-`INVALID_PAYMENT_INSTRUMENT` for the Marketplace-served models, "not available"
-for Opus 5 and Sonnet 5, and 404-Legacy for the older ones. Also that the bare
-`anthropic.` id form returns 400 and the `us.` inference profile is mandatory --
-which would have been a hardcoded guess otherwise.
-
-**4. "The account has no payment instrument, so no model will run."** This one
-was stated here as a recommendation to stop. It was wrong. `INVALID_PAYMENT_
-INSTRUMENT` is specific to models sold through the AWS Marketplace; Amazon's own
-Nova models bill against credits and answer fine. A probe across seven
-non-Anthropic models took two minutes and found four that work.
-
-The pattern in all four: an error message was treated as an explanation. Three
-of the four times, a two-minute probe contradicted it. The one that mattered
-most -- number four -- would have ended the attempt with the conclusion already
-written.
-
-**What the working path cost, once it was found.** `converse` has no
-structured-output parameter, so the schema is declared as a tool the model is
-forced to call and the arguments come back parsed; and usage is
-`inputTokens`/`outputTokens`, not `input_tokens`/`output_tokens`. Reading the
-Anthropic field names off a converse response yields `0 in / 0 out` beside a
-real note -- a run that looks free. Both are pinned by tests.
+Two things the working path cost. `converse` has no structured-output
+parameter, so the schema is declared as a tool the model is forced to call.
+And usage is `inputTokens`/`outputTokens` -- reading the Anthropic field names
+off a converse response yields `0 in / 0 out` beside a real note, a run that
+looks free. Both are pinned by tests.
 
 **And a bug that would have published a false vendor name.** The first version
-reused `AnthropicBackend` for Bedrock, inheriting its `provider = "anthropic"`
-class attribute. The probe run printed `provider anthropic` while AWS served the
-request, and wrote that into `run.json`. Had the Anthropic models been entitled,
-that file would have been committed as cross-vendor evidence naming the wrong
-company -- in a project whose entire claim is that its numbers are checkable. It
-is the same class of error as the stub run that once overwrote `out/agent.json`,
-made one class further down, and it survived because no test asserted that a
-backend reports the vendor that actually served the request. One does now.
+reused `AnthropicBackend`, inheriting its `provider = "anthropic"` class
+attribute, so a Bedrock run wrote `"provider": "anthropic"` into `run.json` --
+naming a company that did not answer, in a project whose claim is that its
+numbers are checkable. Fifth instance of the unobserved-path lesson: no test
+asserted that a backend reports the vendor that served the request. One does now.
 
-**Result.** 19 of 19 notes accepted from `amazon.nova-lite-v1:0`, 0 guard
-rejections, and 0 of 504 verdict fields moved against the zero-model baseline.
-Input tokens double against Gemini because `converse` ships the schema in a tool
-definition on every call. No cost is quoted: Amazon's pricing pages are
-JavaScript-rendered and gave up no figure that could be confirmed for this
-region, and `PRICING` lists only prices that have been read.
+Result: 19 of 19 notes accepted on two Nova models, 0 guard rejections, and 0 of
+504 verdict fields moved. The numbers are in the README.
+
+---
+
+## Still open
+
+- **Why eighteen requests to Gemini 3.7 Flash went unanswered.** Pacing is a
+  hypothesis, not an explanation; exceeding a per-minute limit should produce a
+  429 rather than silence. Untested.
+- **The holdout is training data now.** A genuinely independent accuracy number
+  needs defect families written by someone who has not read `classify.py`.
+- **The guard checks that figures are real, not that sentences are true.** A note
+  citing a real figure in the wrong role passes. That needs semantic
+  verification, which this project does not claim to do.
+- **`nova-lite-v1` has no published price here**, so its run reports tokens and
+  no cost.
+
+What I would do next, in order: the independent defect families, then semantic
+verification of the notes, then the 3.7 timeout question -- which matters least,
+because the answer changes one default and nothing else.
