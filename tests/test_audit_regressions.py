@@ -854,3 +854,75 @@ def test_the_pacing_never_exceeds_the_rate_limit_in_any_window():
         f"{llm.GEMINI_FREE_RPM}: no headroom")
     gaps = [b - a for a, b in zip(sent, sent[1:])]
     assert min(gaps) >= llm.GEMINI_MIN_INTERVAL - 0.01
+
+
+# ---------------------------------------------------------------------------
+# Bedrock backend
+#
+# Claude served by AWS rather than by Anthropic. The adapter's whole claim is
+# that a vendor is a replaceable part, so a new one should cost a constructor
+# and nothing else -- these pin the parts of that which are not obvious.
+# ---------------------------------------------------------------------------
+
+def test_auto_never_selects_bedrock_from_aws_credentials():
+    """AWS credentials say nothing about intent to spend Bedrock quota.
+
+    `--provider auto` walks the providers looking for a key. AWS credentials
+    live in the environment of plenty of machines for reasons unrelated to
+    calling a model, so treating them as a request to use Bedrock would start
+    billing a run that asked for nothing of the sort. Bedrock must be named.
+    """
+    env = {"AWS_ACCESS_KEY_ID": "AKIAEXAMPLE",
+           "AWS_SECRET_ACCESS_KEY": "secret",
+           "AWS_PROFILE": "default"}
+    with mock.patch.dict(os.environ, env, clear=True):
+        with pytest.raises(llm.LLMUnavailable):
+            llm.resolve_provider("auto")
+        # ...but naming it explicitly still works.
+        assert llm.resolve_provider("bedrock") == "bedrock"
+
+
+def test_bedrock_is_registered_but_out_of_the_auto_set():
+    assert "bedrock" in llm.API_KEY_VARS
+    assert "bedrock" not in llm.AUTO_PROVIDERS
+    assert set(llm.AUTO_PROVIDERS) <= set(llm.API_KEY_VARS)
+
+
+def test_bedrock_without_aws_credentials_fails_loudly():
+    """The same early check every provider gets.
+
+    The SDKs do not raise on a missing key; they fail per request, and
+    complete() swallows that into an error count. A run then prints a real
+    model id beside zero tokens and exits 0.
+    """
+    with mock.patch.dict(os.environ, {}, clear=True):
+        with pytest.raises(llm.LLMUnavailable) as e:
+            llm.build_client("bedrock")
+    assert "AWS_ACCESS_KEY_ID" in str(e.value)
+
+
+def test_bedrock_has_no_guessed_default_model():
+    """A model id here would be invented, not read.
+
+    Bedrock addresses models by region-scoped inference profile ids. Writing
+    one into DEFAULT_MODELS would put a guess exactly where a real identifier
+    belongs -- the same failure as a guessed price. The pipeline must therefore
+    ask for --model rather than raise KeyError.
+    """
+    assert "bedrock" not in llm.DEFAULT_MODELS
+
+    from recon.engine import pipeline
+
+    class _Client:
+        provider = "bedrock"
+
+    with mock.patch.object(pipeline, "_run_agent", pipeline._run_agent), \
+         mock.patch("recon.agent.llm.build_client", return_value=_Client()):
+        with pytest.raises(llm.LLMUnavailable) as e:
+            pipeline._run_agent([], None, {}, {}, None, None,
+                                stub=None, provider="bedrock")
+    msg = str(e.value)
+    assert "--model is required" in msg
+    assert "list-foundation-models" in msg, (
+        "an error that says a flag is required without saying how to find a "
+        "valid value for it just moves the dead end")

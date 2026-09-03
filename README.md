@@ -61,7 +61,7 @@ offline from a fresh clone and prints clean.
 | Unexplained bank rows | 30, all reported | 0 |
 | Throughput | 1,149 lines; 24k-51k lines/sec across nine runs, see [`eval/metrics.md`](eval/metrics.md) | |
 
-194 tests. No API key or network required for any of them.
+198 tests. No API key or network required for any of them.
 
 **Read the false-clear rate first.** It counts settlements the engine called
 reconciled that the answer key says needed a human. That is the expensive error:
@@ -251,7 +251,7 @@ python demo.py                      # everything, one command
 open out/report.html                # visual report, self-contained and offline
 
 pip install -e ".[dev]"             # adds pytest
-python -m pytest tests/ -q          # 194 tests
+python -m pytest tests/ -q          # 198 tests
 python eval/run_eval.py             # regenerate eval/metrics.md
 python eval/check_claims.py         # verify this README against a live run
 ```

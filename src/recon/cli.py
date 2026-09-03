@@ -23,9 +23,10 @@ def main(argv=None):
                    help="enable the agent layer (needs ANTHROPIC_API_KEY). "
                         "Off by default: the deterministic engine is the product.")
     p.add_argument("--provider", default="auto",
-                   choices=["auto", "anthropic", "gemini"],
+                   choices=["auto", "anthropic", "gemini", "bedrock"],
                    help="which vendor answers. 'auto' picks whichever API key "
-                        "is in the environment. The verdicts must not depend "
+                        "is in the environment; 'bedrock' must be asked for by name. "
+                        "The verdicts must not depend "
                         "on this choice -- that is the point of it.")
     p.add_argument("--model", default=None,
                    help="model id for the agent layer "

@@ -72,16 +72,35 @@ PRICING = {
 #: with no failures, against 3.7's one success and eighteen unexplained
 #: timeouts. 3.7 is cheaper and stays available through --model. This is a
 #: judgement about evidence, not about the models.
+#: `bedrock` has no default on purpose. Bedrock addresses models by
+#: region-scoped inference profile ids -- `us.anthropic.claude-...-v1:0` -- that
+#: differ by region and change as models are added, so any id written here
+#: would be a guess sitting where a real identifier belongs. `--model` is
+#: required for that provider, and build_client says how to list the ids.
 DEFAULT_MODELS = {
     "anthropic": "claude-opus-5",
     "gemini":    "gemini-3.5-flash",
 }
 
 #: Which environment variable proves each vendor is usable.
+#:
+#: Bedrock authenticates with AWS credentials rather than a model API key, so
+#: any of the three standard ways of presenting them counts.
 API_KEY_VARS = {
     "anthropic": ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"),
     "gemini":    ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    "bedrock":   ("AWS_BEARER_TOKEN_BEDROCK", "AWS_ACCESS_KEY_ID",
+                  "AWS_PROFILE"),
 }
+
+#: Providers `--provider auto` is allowed to select.
+#:
+#: Bedrock is deliberately excluded. A GEMINI_API_KEY in the environment says
+#: the operator intends to call Gemini; AWS credentials say only that this
+#: machine talks to AWS, which is true of plenty of machines that have no
+#: business spending Bedrock quota. Picking a paid provider off a signal that
+#: weak is the wrong default, so Bedrock must be asked for by name.
+AUTO_PROVIDERS = ("anthropic", "gemini")
 
 USD_TO_INR = 88.0
 
@@ -549,14 +568,15 @@ def resolve_provider(requested: str | None) -> str:
     """Which vendor to use. 'auto' picks whichever key is present."""
     if requested and requested != "auto":
         return requested
-    for name, keys in API_KEY_VARS.items():
-        if any(os.environ.get(k) for k in keys):
+    for name in AUTO_PROVIDERS:
+        if any(os.environ.get(k) for k in API_KEY_VARS[name]):
             return name
     raise LLMUnavailable(
         "no model API key in the environment. Set ANTHROPIC_API_KEY or "
-        "GEMINI_API_KEY. The agent layer is optional -- the deterministic "
-        "engine is the product and runs without it. To exercise the agent "
-        "code path offline instead, use --llm-stub.")
+        "GEMINI_API_KEY, or ask for Bedrock by name with --provider bedrock. "
+        "The agent layer is optional -- the deterministic engine is the "
+        "product and runs without it. To exercise the agent code path offline "
+        "instead, use --llm-stub.")
 
 
 def build_client(provider: str | None = None) -> Backend:
@@ -586,6 +606,30 @@ def build_client(provider: str | None = None) -> Backend:
         except Exception as e:
             raise LLMUnavailable(
                 f"could not construct an Anthropic client ({e}).") from e
+
+    if provider == "bedrock":
+        # Same Messages API, same request shape, different transport and auth:
+        # AnthropicBedrock speaks to AWS with SigV4 instead of to Anthropic with
+        # an API key, so AnthropicBackend is reused verbatim. That reuse is the
+        # point -- if the adapter is a real boundary, a new vendor should cost a
+        # constructor and nothing else.
+        try:
+            import anthropic
+        except ImportError as e:
+            raise LLMUnavailable(
+                "the 'anthropic' package is not installed. "
+                "Install it with:  pip install -e '.[bedrock]'") from e
+        if not hasattr(anthropic, "AnthropicBedrock"):
+            raise LLMUnavailable(
+                "this 'anthropic' build has no AnthropicBedrock client. "
+                "Install the Bedrock extra:  pip install -e '.[bedrock]'")
+        try:
+            return AnthropicBackend(anthropic.AnthropicBedrock())
+        except Exception as e:
+            raise LLMUnavailable(
+                f"could not construct a Bedrock client ({e}). Check that "
+                f"AWS credentials and AWS_REGION are set, and that model "
+                f"access is enabled in the Bedrock console.") from e
 
     if provider == "gemini":
         try:

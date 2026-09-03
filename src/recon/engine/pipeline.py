@@ -105,6 +105,7 @@ def _run_agent(findings, m, units, order_index, model, narrate_limit,
     from ..agent.llm import (
         DEFAULT_MODELS,
         AnthropicBackend,
+        LLMUnavailable,
         Usage,
         build_client,
     )
@@ -125,7 +126,19 @@ def _run_agent(findings, m, units, order_index, model, narrate_limit,
     else:
         # raises LLMUnavailable; the CLI reports it
         client = build_client(provider)
-        model = model or DEFAULT_MODELS[client.provider]
+        if not model:
+            model = DEFAULT_MODELS.get(client.provider)
+        if not model:
+            # Bedrock is the case: region-scoped inference profile ids that no
+            # constant here can honestly predict. Say how to find one rather
+            # than failing with a KeyError.
+            raise LLMUnavailable(
+                f"--provider {client.provider} has no default model, so "
+                f"--model is required. List the ids available to your "
+                f"account with:\n"
+                f"    aws bedrock list-foundation-models "
+                f"--by-provider anthropic "
+                f"--query 'modelSummaries[].modelId' --output text")
     usage = Usage(model=model)
     stats = GuardStats()
 

@@ -41,6 +41,8 @@ agent = ["anthropic>=0.69"]
 # Either vendor satisfies the agent layer; neither is needed for the
 # deterministic engine, which is the product.
 gemini = ["google-genai>=2.0"]
+# Claude served by AWS: same Messages API, SigV4 instead of an API key.
+bedrock = ["anthropic[bedrock]>=0.69"]
 dev = ["pytest>=8"]
 
 [tool.pytest.ini_options]
