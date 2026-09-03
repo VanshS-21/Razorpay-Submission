@@ -1,0 +1,445 @@
+<title>One Line on a Bank Statement</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+:root{
+  --ground:#0E1116; --panel:#161A21; --panel2:#1B212A;
+  --rule:#262C36; --rule-soft:#1D2229;
+  --ink:#E6E9EE; --ink-dim:#96A0AE; --ink-faint:#5C6675;
+  --brass:#D9A05B; --brass-dim:#8A6634;
+  --sage:#6FA287; --clay:#C97064;
+  --sans:"IBM Plex Sans",-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono","Consolas",monospace;
+  --serif:"Newsreader",Georgia,"Times New Roman",serif;
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font-family:var(--sans);margin:0;
+  height:100vh;overflow:hidden;display:flex;align-items:center;justify-content:center}
+
+.stage{position:relative;width:min(100vw,calc(100vh*16/9));height:min(100vh,calc(100vw*9/16));
+  container-type:size;background:var(--ground);overflow:hidden}
+
+.slide{position:absolute;inset:0;padding:4.4cqw 5.6cqw 5cqw;display:flex;flex-direction:column;
+  opacity:0;visibility:hidden;transition:opacity .2s ease}
+.slide.on{opacity:1;visibility:visible}
+@media (prefers-reduced-motion:reduce){.slide{transition:none}}
+
+.head{display:flex;justify-content:space-between;align-items:baseline;font-family:var(--mono);
+  font-size:1cqw;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);
+  padding-bottom:1cqw;border-bottom:1px solid var(--rule);flex:0 0 auto}
+.head .sec{color:var(--brass-dim)}
+
+.body{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;gap:2.2cqw;min-height:0}
+.body.tight{gap:1.5cqw}
+
+h1{font-family:var(--serif);font-weight:500;font-size:6cqw;line-height:1.05;letter-spacing:-.015em;
+  margin:0;text-wrap:balance;max-width:19ch}
+h2{font-family:var(--serif);font-weight:500;font-size:4.2cqw;line-height:1.12;margin:0;
+  text-wrap:balance;max-width:24ch}
+h3{font-weight:600;font-size:1.95cqw;line-height:1.3;margin:0;max-width:36ch}
+p{font-size:1.95cqw;line-height:1.5;margin:0;color:var(--ink-dim);max-width:38ch}
+p.lead{color:var(--ink);max-width:32ch}
+.em{color:var(--brass)}
+.strike{text-decoration:line-through;color:var(--ink-faint)}
+.kicker{font-family:var(--mono);font-size:1.1cqw;letter-spacing:.18em;text-transform:uppercase;color:var(--brass)}
+
+/* terminal / file capture */
+pre{font-family:var(--mono);font-size:1.5cqw;line-height:1.55;background:var(--panel);
+  border:1px solid var(--rule);border-left:2px solid var(--brass-dim);border-radius:2px;
+  padding:1.6cqw 2cqw;margin:0;color:var(--ink);overflow:hidden;max-width:100%;
+  font-variant-numeric:tabular-nums;white-space:pre}
+pre.sm{font-size:1.25cqw;line-height:1.5}
+pre .c{color:var(--ink-faint)}
+pre .g{color:var(--sage)}
+pre .r{color:var(--clay)}
+pre .b{color:var(--brass)}
+pre .hl{background:rgba(217,160,91,.16);border-radius:2px}
+
+/* bank statement card */
+.stmt{background:var(--panel);border:1px solid var(--rule);border-radius:2px;padding:2cqw 2.4cqw;
+  font-family:var(--mono);font-variant-numeric:tabular-nums;max-width:74cqw}
+.stmt-head{display:flex;gap:2cqw;font-size:.95cqw;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-faint);padding-bottom:1.2cqw;border-bottom:1px solid var(--rule)}
+.stmt-head span:nth-child(1){flex:0 0 11cqw}
+.stmt-head span:nth-child(2){flex:1 1 auto}
+.stmt-head span:nth-child(3){flex:0 0 14cqw;text-align:right}
+.stmt-row{display:flex;gap:2cqw;align-items:baseline;padding-top:1.6cqw;font-size:1.5cqw}
+.stmt-row .d{flex:0 0 11cqw;color:var(--ink-dim)}
+.stmt-row .n{flex:1 1 auto;color:var(--ink-dim);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.stmt-row .a{flex:0 0 14cqw;text-align:right;color:var(--sage);font-weight:600;font-size:2.1cqw}
+.stmt-row.on{background:rgba(217,160,91,.1);margin:0 -1cqw;padding-left:1cqw;padding-right:1cqw;border-radius:2px}
+
+.cols{display:flex;gap:2cqw;width:100%}
+.col{flex:1 1 0;background:var(--panel);border:1px solid var(--rule);border-top:2px solid var(--brass-dim);
+  border-radius:2px;padding:1.8cqw;display:flex;flex-direction:column;gap:.8cqw;min-width:0}
+.col .name{font-family:var(--mono);font-size:1.25cqw;word-break:break-all}
+.col .what{font-size:1.4cqw;color:var(--ink-dim);line-height:1.45}
+
+.chips{display:flex;gap:1cqw;flex-wrap:wrap}
+.chip{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:2.2cqw;font-weight:500;
+  padding:.6cqw 1.4cqw;border:1px solid var(--rule);border-radius:2px;color:var(--ink-dim);background:var(--panel)}
+.chip.a{border-color:var(--brass);color:var(--brass)}
+.chip.b{border-color:var(--sage);color:var(--sage)}
+.sums{display:flex;flex-direction:column;gap:.9cqw;font-family:var(--mono);font-size:2.2cqw;
+  font-variant-numeric:tabular-nums}
+.sum-a{color:var(--brass)} .sum-b{color:var(--sage)}
+
+.stats{display:flex;gap:4cqw;flex-wrap:wrap}
+.stat{display:flex;flex-direction:column;gap:.4cqw}
+.stat .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:4.4cqw;font-weight:500;line-height:1}
+.stat .k{font-size:1.3cqw;color:var(--ink-dim)}
+.v.good{color:var(--sage)} .v.warn{color:var(--brass)} .v.bad{color:var(--clay)}
+
+.nots{display:flex;flex-direction:column;gap:1.2cqw;width:100%;max-width:56cqw}
+.not{display:flex;align-items:baseline;gap:1.4cqw;padding-bottom:1.1cqw;
+  border-bottom:1px solid var(--rule-soft);font-size:1.9cqw}
+.not .x{font-family:var(--mono);color:var(--clay);font-size:1.6cqw;flex:0 0 auto}
+.not .y{font-family:var(--mono);color:var(--sage);font-size:1.6cqw;flex:0 0 auto}
+
+.versus{display:flex;gap:2.4cqw;width:100%}
+.vs-half{flex:1 1 0;padding:2cqw;background:var(--panel);border:1px solid var(--rule);
+  border-radius:2px;display:flex;flex-direction:column;gap:.8cqw}
+.vs-half.mark{border-color:var(--brass-dim)}
+.vs-half .big{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:3.6cqw;
+  font-weight:500;line-height:1}
+.vs-half .lab{font-size:1.45cqw;color:var(--ink-dim);line-height:1.45}
+
+.prog{position:absolute;left:0;bottom:0;height:2px;background:var(--brass);opacity:.5;transition:width .2s}
+
+.bar{position:fixed;left:50%;bottom:2.2vh;transform:translateX(-50%);display:flex;align-items:center;
+  gap:1.3rem;padding:.5rem 1rem;background:rgba(22,26,33,.95);border:1px solid var(--rule);
+  border-radius:3px;font-family:var(--mono);font-size:.7rem;letter-spacing:.05em;color:var(--ink-dim);
+  opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
+.bar.show{opacity:1}
+.bar b{color:var(--ink);font-weight:500}
+.bar .over{color:var(--clay)}
+.bar .keys{color:var(--ink-faint)}
+.bar .cue{color:var(--brass)}
+</style>
+
+<div class="stage" id="stage">
+
+<!-- ============ BEAT 1 — THE PROBLEM (0:00-0:35) ============ -->
+<section class="slide" data-sec="1 · the problem" data-end="10">
+  <div class="head"><span class="sec">01 — the problem</span><span>bank_statement.csv</span></div>
+  <div class="body">
+    <div class="stmt">
+      <div class="stmt-head"><span>Value date</span><span>Narration</span><span>Credit</span></div>
+      <div class="stmt-row on">
+        <span class="d">2026-06-01</span>
+        <span class="n">NEFT-6947530309t579-RAZORPAY SOFTWARE PVT LTD-HDFC0000060</span>
+        <span class="a">₹48,948.57</span>
+      </div>
+      <div class="stmt-row">
+        <span class="d">2026-06-02</span>
+        <span class="n">UPI-9142791059x839-CUSTOMER DIRECT TRANSFER</span>
+        <span class="a">₹13,171.93</span>
+      </div>
+      <div class="stmt-row">
+        <span class="d">2026-06-03</span>
+        <span class="n">NEFT-2905584866w406-RAZORPAY SOFTWARE PVT LTD-HDFC0000060</span>
+        <span class="a">₹98,473.84</span>
+      </div>
+    </div>
+    <p class="lead">One credit. One amount.</p>
+  </div>
+</section>
+
+<section class="slide" data-sec="1 · the problem" data-end="22">
+  <div class="head"><span class="sec">01 — the problem</span><span>what that number is</span></div>
+  <div class="body">
+    <h2>That is not a payment.</h2>
+    <p>It is one lump sum covering dozens of payments, minus fees, GST, refunds and
+       chargebacks — and sometimes several payouts swept into a single transfer
+       quoting <span class="em">one reference number</span>.</p>
+  </div>
+</section>
+
+<section class="slide" data-sec="1 · the problem" data-end="35">
+  <div class="head"><span class="sec">01 — the problem</span><span>the wrong question</span></div>
+  <div class="body">
+    <h2><span class="strike">Which settlement is this credit for?</span></h2>
+    <h2>Which <span class="em">group</span> of settlements does it cover?</h2>
+    <p>A search, not a lookup. Which is why this is still done by hand.</p>
+  </div>
+</section>
+
+<!-- ============ BEAT 2 — IT RUNS (0:35-1:15) ============ -->
+<section class="slide" data-sec="2 · it runs" data-end="45">
+  <div class="head"><span class="sec">02 — it runs</span><span>three sources</span></div>
+  <div class="body">
+    <h3>Three sources that should agree, and never do.</h3>
+    <div class="cols">
+      <div class="col"><div class="name">settlement_recon.csv</div>
+        <div class="what">What Razorpay says it paid out</div></div>
+      <div class="col"><div class="name">bank_statement.csv</div>
+        <div class="what">What actually landed in the bank</div></div>
+      <div class="col"><div class="name">order_ledger.csv</div>
+        <div class="what">What the business thinks it sold</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-sec="2 · it runs" data-end="75">
+  <div class="head"><span class="sec">02 — it runs</span><span>python demo.py</span></div>
+  <div class="body">
+    <pre>$ python demo.py
+
+<span class="c">######################################################</span>
+<span class="c">#</span> 1/5  Generating the synthetic dataset + answer key
+<span class="c">#</span> 2/5  Reconciling the main batch
+<span class="c">#</span> 3/5  Adversarial holdout: TWO defects at once
+<span class="c">#</span> 4/5  The guard: a model that lies
+<span class="c">#</span> 5/5  Writing eval/metrics.md
+<span class="c">######################################################</span>
+
+  1149 lines / 126 settlements in <span class="g">0.049s</span>
+  load 0.043s | match 0.003s | classify 0.003s</pre>
+    <p>One command. No API key, no network, standard library only.</p>
+  </div>
+</section>
+
+<!-- ============ BEAT 3 — THE NUMBERS (1:15-2:05) ============ -->
+<section class="slide" data-sec="3 · the numbers" data-end="95">
+  <div class="head"><span class="sec">03 — the numbers</span><span>read this one first</span></div>
+  <div class="body">
+    <pre>SAFETY  <span class="c">(the metric that matters most)</span>
+<span class="c">------------------------------------------------------</span>
+  False-clear rate      <span class="g">0.0%</span>   (0 of 19 must-escalate)  <span class="g">[PASS]</span>
+  False-escalate rate   <span class="g">0.0%</span>   (0 of 107 that should reconcile)</pre>
+    <p class="lead">A false clear is money quietly lost. A false escalate costs
+       someone ten minutes.</p>
+  </div>
+</section>
+
+<section class="slide" data-sec="3 · the numbers" data-end="112">
+  <div class="head"><span class="sec">03 — the numbers</span><span>coverage</span></div>
+  <div class="body">
+    <pre>COVERAGE
+<span class="c">------------------------------------------------------</span>
+  Match rate                <span class="b">84.9%</span>  (107/126 auto-reconciled)
+  Classification accuracy  <span class="b">100.0%</span>  (correct reason code)
+
+BANK-SIDE COVERAGE
+<span class="c">------------------------------------------------------</span>
+  Statement rows left unexplained   <span class="b">30</span>
+  <span class="c">reported, not guessed at</span></pre>
+    <p>The other 15% is 19 settlements that genuinely need a person.</p>
+  </div>
+</section>
+
+<section class="slide" data-sec="3 · the numbers" data-end="125">
+  <div class="head"><span class="sec">03 — the numbers</span><span>the hook</span></div>
+  <div class="body">
+    <h1>Reason-code accuracy: <span class="em">100%</span></h1>
+    <p class="lead">I will come back to why you should not believe that number.</p>
+  </div>
+</section>
+
+<!-- ============ BEAT 4 — THE DELTA-ZERO CASE (2:05-2:45) ============ -->
+<section class="slide" data-sec="4 · the case" data-end="140">
+  <div class="head"><span class="sec">04 — the case that proves the third source</span><span>out/report.html</span></div>
+  <div class="body">
+    <pre class="sm">setl_09V2DKJNX20309   ledger_mismatch            <span class="b">Rs 0.00</span>
+
+  2 payment line(s) disagree with the order ledger; largest is
+  order_CUZW3HGCAJ0322 booked at <span class="hl">Rs 624.85</span> against a ledger
+  value of <span class="hl">Rs 556.97</span>. The errors net to Rs 0.00 across the
+  settlement, so the payout total and the bank credit both
+  still tie.</pre>
+    <p class="lead">Two lines are wrong. The errors cancel.</p>
+  </div>
+</section>
+
+<section class="slide" data-sec="4 · the case" data-end="158">
+  <div class="head"><span class="sec">04 — the case that proves the third source</span><span>why it matters</span></div>
+  <div class="body">
+    <h1>The delta is <span class="em">zero</span>. Every total balances.</h1>
+    <p>A reconciliation that checks only the bank against the payout cannot see
+       this at all. You need the third source.</p>
+  </div>
+</section>
+
+<section class="slide" data-sec="4 · the case" data-end="165">
+  <div class="head"><span class="sec">04 — the case that proves the third source</span><span>the action line</span></div>
+  <div class="body">
+    <pre class="sm">ACTION: Reconcile each flagged order against the source
+invoice before closing. <span class="b">The settlement total is not
+evidence that the lines are right.</span></pre>
+  </div>
+</section>
+
+<!-- ============ BEAT 5 — AI JUDGMENT (2:45-3:45) ============ -->
+<section class="slide" data-sec="5 · where the AI is" data-end="180">
+  <div class="head"><span class="sec">05 — where I did, and did not, use a model</span><span>the rule</span></div>
+  <div class="body">
+    <h1>Deterministic where money is concerned.</h1>
+    <h2>Probabilistic only where language is.</h2>
+  </div>
+</section>
+
+<section class="slide" data-sec="5 · where the AI is" data-end="196">
+  <div class="head"><span class="sec">05 — where I did, and did not, use a model</span><span>the boundary</span></div>
+  <div class="body">
+    <div class="nots">
+      <div class="not"><span class="x">✕</span><span>Compute, round or estimate any amount</span></div>
+      <div class="not"><span class="x">✕</span><span>Decide whether a settlement is reconciled</span></div>
+      <div class="not"><span class="x">✕</span><span>Assign a reason code</span></div>
+      <div class="not"><span class="y">✓</span><span>Write the 19 exception notes a human must act on</span></div>
+    </div>
+    <p>Money is whole paise end to end. No floats in the money path.</p>
+  </div>
+</section>
+
+<section class="slide" data-sec="5 · where the AI is" data-end="215">
+  <div class="head"><span class="sec">05 — where I did, and did not, use a model</span><span>demo stage 4/5 — the guard</span></div>
+  <div class="body">
+    <pre>  <span class="c">*** SCRIPTED STUB -- NOT A REAL MODEL CALL ***</span>
+  model                 SCRIPTED-STUB[hallucinating]
+  narration notes       0 accepted
+  guard rejections      <span class="r">19/19 (100.0%)</span>
+      <span class="r">invented_figure:9999999.99: 19</span>
+
+  Every fabricated figure was caught, and
+  <span class="g">0 of 126 verdicts moved.</span></pre>
+    <p class="lead">A model that lies as hard as it can. The books close identically.</p>
+  </div>
+</section>
+
+<section class="slide" data-sec="5 · where the AI is" data-end="225">
+  <div class="head"><span class="sec">05 — where I did, and did not, use a model</span><span>four live models, two vendors</span></div>
+  <div class="body">
+    <div class="stats">
+      <div class="stat"><span class="v">504</span><span class="k">verdict fields compared</span></div>
+      <div class="stat"><span class="v good">0</span><span class="k">moved</span></div>
+      <div class="stat"><span class="v">4</span><span class="k">live models</span></div>
+      <div class="stat"><span class="v">2</span><span class="k">vendors — Google, AWS</span></div>
+    </div>
+    <p>One of them failed 18 of 19 calls. The reconciliation was identical.</p>
+  </div>
+</section>
+
+<!-- ============ BEAT 6 — WHAT BROKE (3:45-4:35) ============ -->
+<section class="slide" data-sec="6 · what broke" data-end="240">
+  <div class="head"><span class="sec">06 — what broke</span><span>back to that 100%</span></div>
+  <div class="body">
+    <h2>I wrote the defect generator <em>and</em> the detection rules.</h2>
+    <p>So 100% measures whether two expressions of my own assumptions agree. It is
+       a regression guard, not a result.</p>
+  </div>
+</section>
+
+<section class="slide" data-sec="6 · what broke" data-end="258">
+  <div class="head"><span class="sec">06 — what broke</span><span>the adversarial holdout</span></div>
+  <div class="body">
+    <pre>adversarial holdout — <span class="b">two defects per settlement</span>
+
+False-clear rate      <span class="r">33.3%   (4 of 12)   [FAIL]</span>
+False-escalate rate   <span class="r">33.3%</span></pre>
+    <p class="lead">It failed immediately. Both causes were real bugs — I had written
+       a three-way reconciler that only did three-way in the direction money
+       comes in.</p>
+  </div>
+</section>
+
+<section class="slide" data-sec="6 · what broke" data-end="275">
+  <div class="head"><span class="sec">06 — what broke</span><span>docs/FAILURE_LOG.md</span></div>
+  <div class="body tight">
+    <h3>The claim I was proudest of was false.</h3>
+    <p class="lead">My guard was re-running a test the matcher had already failed,
+       so every model proposal passed it. The test protecting it could not fail.</p>
+    <p>Both fixed, both pinned with regression tests. The log says all of it in the
+       order it happened, with the wrong paragraphs left standing.</p>
+  </div>
+</section>
+
+<!-- ============ BEAT 7 — CLOSE (4:35-5:00) ============ -->
+<section class="slide" data-sec="7 · close" data-end="290">
+  <div class="head"><span class="sec">07 — close</span><span>the limitation I will state myself</span></div>
+  <div class="body">
+    <h2>Once I fixed the engine against that holdout, it stopped being unseen data.</h2>
+    <p>It is training data now, and the README says so where the number appears.</p>
+  </div>
+</section>
+
+<section class="slide" data-sec="7 · close" data-end="300">
+  <div class="head"><span class="sec">07 — close</span><span>everything is checkable</span></div>
+  <div class="body">
+    <pre>python -m pytest tests/ -q     <span class="c"># 202 tests, no key, no network</span>
+python eval/check_claims.py    <span class="c"># fails if the README overstates</span></pre>
+    <p class="lead">Every figure traces to an identity a human can re-derive.</p>
+  </div>
+</section>
+
+<section class="slide" data-sec="7 · close" data-end="305">
+  <div class="head"><span class="sec">07 — close</span><span>thank you</span></div>
+  <div class="body">
+    <div class="kicker">Razorpay AI Buildathon · Track 04</div>
+    <h1>Three-way settlement reconciliation</h1>
+    <p class="lead">Vansh S<br>github.com/VanshS-21/Razorpay-Submission</p>
+  </div>
+</section>
+
+<div class="prog" id="prog"></div>
+</div>
+
+<div class="bar" id="bar">
+  <span><b id="pos">1</b>/<span id="tot">0</span></span>
+  <span id="sec">—</span>
+  <span>clock <b id="clock">0:00</b> <span id="target">/ 0:10</span></span>
+  <span id="cue" class="cue"></span>
+  <span class="keys">→ next · ← back · F full · R reset</span>
+</div>
+
+<script>
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var bar = document.getElementById('bar'), stage = document.getElementById('stage');
+  var i = 0, t0 = null, hideTimer = null;
+  document.getElementById('tot').textContent = slides.length;
+
+  function mmss(s){s=Math.max(0,Math.round(s));return Math.floor(s/60)+':'+('0'+(s%60)).slice(-2);}
+
+  function show(n){
+    i = Math.max(0, Math.min(slides.length-1, n));
+    slides.forEach(function(s,k){ s.classList.toggle('on', k===i); });
+    document.getElementById('prog').style.width = ((i+1)/slides.length*100)+'%';
+    document.getElementById('pos').textContent = i+1;
+    document.getElementById('sec').textContent = slides[i].dataset.sec;
+    document.getElementById('target').textContent = '/ '+mmss(+slides[i].dataset.end);
+    tick();
+  }
+  function tick(){
+    var el = document.getElementById('clock');
+    if (t0 === null){ el.textContent='0:00'; el.className=''; return; }
+    var s = (Date.now()-t0)/1000;
+    el.textContent = mmss(s);
+    el.className = s > +slides[i].dataset.end + 5 ? 'over' : '';
+  }
+  setInterval(tick, 500);
+  function flash(){ bar.classList.add('show'); clearTimeout(hideTimer);
+    hideTimer = setTimeout(function(){ bar.classList.remove('show'); }, 2400); }
+
+  document.addEventListener('keydown', function(e){
+    var k = e.key;
+    if (k==='ArrowRight'||k===' '||k==='PageDown'||k==='Enter'){
+      if (t0===null) t0 = Date.now();
+      show(i+1); flash(); e.preventDefault();
+    } else if (k==='ArrowLeft'||k==='PageUp'||k==='Backspace'){ show(i-1); flash(); e.preventDefault(); }
+    else if (k==='Home'){ show(0); flash(); }
+    else if (k==='End'){ show(slides.length-1); flash(); }
+    else if (k==='f'||k==='F'){ if(document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen(); }
+    else if (k==='r'||k==='R'){ t0=null; show(0); flash(); }
+    else flash();
+  });
+  stage.addEventListener('click', function(e){
+    if (t0===null) t0 = Date.now();
+    show(e.clientX < window.innerWidth/2 ? i-1 : i+1); flash();
+  });
+  document.addEventListener('mousemove', flash);
+  show(0); flash();
+})();
+</script>
