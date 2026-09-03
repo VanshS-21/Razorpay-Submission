@@ -7,7 +7,10 @@
 **Razorpay AI Buildathon — Track 04, AI Finance Controller**
 By [Vansh S](https://github.com/VanshS-21)
 
-<!-- Demo video: paste the link on the line below once recorded. -->
+**Demo video:** _(link goes here — paste the unlisted URL on this line)_
+<!-- Replace the italic text above with the URL. It is visible on purpose:
+     an HTML comment renders as nothing, so a missing video looked like no
+     video was ever planned. -->
 
 ---
 
@@ -59,7 +62,7 @@ offline from a fresh clone and prints clean.
 | Match rate | 84.9% | 50.0% (compound defects, outside the classifier's design by construction) |
 | Reason-code accuracy | 100.0% | 100.0%, of which 83.3% exact primary |
 | Unexplained bank rows | 30, all reported | 0 |
-| Throughput | 1,149 lines; 24k-51k lines/sec across nine runs, see [`eval/metrics.md`](eval/metrics.md) | |
+| Throughput | 1,149 lines in ~0.03s; tens of thousands of lines/sec, machine-dependent — see [`eval/metrics.md`](eval/metrics.md) | |
 | **Verdicts moved by the model** | **0** of 504 fields, across 4 live models on 2 vendors | |
 
 202 tests. No API key or network required for any of them.
@@ -84,9 +87,12 @@ defect generator and I wrote the detection rules, so that number measures whethe
 two expressions of the same assumptions agree. The holdout is the number worth
 reading. See [Honest measurement](#honest-measurement).
 
-Throughput is quoted as a range because nine identical runs here spanned
-24k–51k lines/sec. At 1,149 lines it is not a scalability claim either: the
-dataset fits in cache, and the subset-sum pass is quadratic in settlement count.
+Throughput is deliberately not pinned to a figure. Nine identical runs on one
+machine spanned better than 3x, and `eval/metrics.md` regenerates a different
+range every time it runs — so any number quoted here would be stale on the next
+run and wrong on another machine. At 1,149 lines it is not a scalability claim
+either: the dataset fits in cache, and the subset-sum pass is quadratic in
+settlement count.
 
 Full per-class results and caveats: [`eval/metrics.md`](eval/metrics.md).
 
