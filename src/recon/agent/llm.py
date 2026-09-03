@@ -72,6 +72,7 @@ PRICING = {
 #: with no failures, against 3.7's one success and eighteen unexplained
 #: timeouts. 3.7 is cheaper and stays available through --model. This is a
 #: judgement about evidence, not about the models.
+#:
 #: `bedrock` has no default on purpose. Bedrock addresses models by
 #: region-scoped inference profile ids -- `us.anthropic.claude-...-v1:0` -- that
 #: differ by region and change as models are added, so any id written here
@@ -395,6 +396,81 @@ class AnthropicBackend(Backend):
             return None
 
 
+#: The tool the model is forced to call. Its name is arbitrary; what matters is
+#: that the schema lives in `inputSchema`, so the arguments come back parsed.
+_CONVERSE_TOOL = "emit"
+
+
+class BedrockConverseBackend(Backend):
+    """Amazon Bedrock, through the model-agnostic `converse` API.
+
+    A third wire shape behind the same one method. Two things differ from the
+    Anthropic and Gemini backends, and both are the API's shape rather than
+    this project's choice:
+
+    1. There is no structured-output parameter. `converse` gets schema-valid
+       JSON by declaring a tool whose `inputSchema` IS the schema and then
+       forcing the model to call it, so the arguments arrive parsed. Support is
+       per-model -- Llama 3 8B rejects tool use outright and Mistral 7B rejects
+       system messages -- so a model that answers a plain prompt may still be
+       unusable here.
+    2. Usage is `inputTokens`/`outputTokens`, not `input_tokens`/`output_tokens`.
+
+    The Anthropic-served models on Bedrock are sold through the AWS
+    Marketplace and refuse with INVALID_PAYMENT_INSTRUMENT on an account with
+    credits but no card. Amazon's own Nova models do not, which is why this
+    path exists at all: it reaches every model on the platform, where the
+    `AnthropicBedrock` client reaches only the ones behind that paywall.
+    """
+
+    provider = "bedrock"
+
+    def __init__(self, client):
+        self.client = client
+
+    def complete(self, model, system, prompt, schema, max_tokens, usage):
+        try:
+            resp = self.client.converse(
+                modelId=model,
+                system=[{"text": system}],
+                messages=[{"role": "user", "content": [{"text": prompt}]}],
+                # temperature 0 because two runs of this pipeline should differ
+                # as little as the vendor allows; the cost figures are compared
+                # across runs and a sampling knob would muddy that.
+                inferenceConfig={"maxTokens": max_tokens, "temperature": 0},
+                toolConfig={
+                    "tools": [{"toolSpec": {
+                        "name": _CONVERSE_TOOL,
+                        "description": "Return the answer as structured data.",
+                        "inputSchema": {"json": schema},
+                    }}],
+                    "toolChoice": {"tool": {"name": _CONVERSE_TOOL}},
+                },
+            )
+            u = resp.get("usage") or {}
+            usage.record(inp=u.get("inputTokens", 0),
+                         out=u.get("outputTokens", 0))
+            if resp.get("stopReason") == "max_tokens":
+                usage.errors += 1
+                _debug(RuntimeError("stopReason=max_tokens"))
+                return None
+            blocks = (resp.get("output", {}).get("message", {})
+                          .get("content") or [])
+            use = next((b["toolUse"] for b in blocks if "toolUse" in b), None)
+            if use is None:
+                # Forced tool use asked for; prose came back. Counting this as
+                # a success would hand the guard a None and read as the model
+                # declining to help.
+                usage.errors += 1
+                _debug(RuntimeError("no toolUse block in response"))
+                return None
+            return use.get("input")
+        except Exception as e:
+            usage.errors += 1
+            _debug(e)
+            return None
+
+
 class GeminiBackend(Backend):
     provider = "gemini"
 
@@ -608,32 +684,31 @@ def build_client(provider: str | None = None) -> Backend:
                 f"could not construct an Anthropic client ({e}).") from e
 
     if provider == "bedrock":
-        # Same Messages API, same request shape, different transport and auth:
-        # AnthropicBedrock speaks to AWS with SigV4 instead of to Anthropic with
-        # an API key, so AnthropicBackend is reused verbatim. That reuse is the
-        # point -- if the adapter is a real boundary, a new vendor should cost a
-        # constructor and nothing else.
+        # boto3 rather than anthropic.AnthropicBedrock. The Anthropic client
+        # speaks only to Anthropic-served models, and those are AWS Marketplace
+        # products: on an account holding credits but no card they refuse with
+        # INVALID_PAYMENT_INSTRUMENT, while Amazon's own models answer fine.
+        # `converse` reaches both, so the narrower client buys nothing.
         try:
-            import anthropic
+            import boto3
         except ImportError as e:
             raise LLMUnavailable(
-                "the 'anthropic' package is not installed. "
+                "the 'boto3' package is not installed. "
                 "Install it with:  pip install -e '.[bedrock]'") from e
-        if not hasattr(anthropic, "AnthropicBedrock"):
+        region = (os.environ.get("AWS_REGION")
+                  or os.environ.get("AWS_DEFAULT_REGION"))
+        if not region:
             raise LLMUnavailable(
-                "this 'anthropic' build has no AnthropicBedrock client. "
-                "Install the Bedrock extra:  pip install -e '.[bedrock]'")
+                "AWS_REGION is not set. Bedrock is region-scoped and the "
+                "model ids differ by region, so there is no safe default to "
+                "pick here.")
         try:
-            return AnthropicBackend(anthropic.AnthropicBedrock())
+            return BedrockConverseBackend(
+                boto3.client("bedrock-runtime", region_name=region))
         except Exception as e:
             raise LLMUnavailable(
                 f"could not construct a Bedrock client ({e}). Check that AWS "
-                f"credentials and AWS_REGION are set.\n"
-                f"Serverless models now enable themselves on first invoke, so "
-                f"there is no access page to visit -- but Anthropic models may "
-                f"ask a first-time account for use-case details, and that "
-                f"arrives as AccessDeniedException on the first call rather "
-                f"than as a setup step.") from e
+                f"credentials are set for region {region}.") from e
 
     if provider == "gemini":
         try:

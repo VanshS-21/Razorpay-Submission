@@ -926,3 +926,80 @@ def test_bedrock_has_no_guessed_default_model():
     assert "list-foundation-models" in msg, (
         "an error that says a flag is required without saying how to find a "
         "valid value for it just moves the dead end")
+
+
+def test_converse_forces_a_tool_call_and_returns_parsed_arguments():
+    """The converse API has no structured-output parameter.
+
+    Schema-valid JSON comes from declaring a tool whose inputSchema IS the
+    schema and forcing the model to call it. If the request stops forcing it,
+    the model is free to answer in prose and narrate.py gets None.
+    """
+    sent = {}
+
+    class _Client:
+        def converse(self, **kw):
+            sent.update(kw)
+            return {"usage": {"inputTokens": 501, "outputTokens": 52},
+                    "stopReason": "tool_use",
+                    "output": {"message": {"content": [
+                        {"toolUse": {"name": "emit",
+                                     "input": {"explanation": "e",
+                                               "action_required": "a"}}}]}}}
+
+    u = Usage(model="us.amazon.nova-lite-v1:0")
+    b = llm.BedrockConverseBackend(_Client())
+    schema = {"type": "object", "properties": {"explanation": {"type": "string"}}}
+    got = b.complete("us.amazon.nova-lite-v1:0", "sys", "prompt", schema, 4096, u)
+
+    assert got == {"explanation": "e", "action_required": "a"}
+    assert sent["toolConfig"]["toolChoice"] == {"tool": {"name": "emit"}}, (
+        "the tool must be forced; 'auto' lets the model answer in prose")
+    assert sent["toolConfig"]["tools"][0]["toolSpec"]["inputSchema"]["json"] \
+        is schema, "the caller's schema must reach the model unmodified"
+    # inputTokens/outputTokens, not input_tokens/output_tokens. Reading the
+    # Anthropic field names off a converse response yields 0 in / 0 out beside
+    # a real note -- a run that looks free.
+    assert (u.input_tokens, u.output_tokens) == (501, 52)
+
+
+def test_converse_prose_reply_is_an_error_not_a_success():
+    """No toolUse block means nothing usable, however well-formed the prose."""
+    class _Client:
+        def converse(self, **kw):
+            return {"usage": {"inputTokens": 10, "outputTokens": 5},
+                    "stopReason": "end_turn",
+                    "output": {"message": {"content": [{"text": "sure thing"}]}}}
+
+    u = Usage(model="m")
+    assert llm.BedrockConverseBackend(_Client()).complete(
+        "m", "s", "p", {}, 4096, u) is None
+    assert u.errors == 1
+
+
+def test_converse_backend_reports_bedrock_not_anthropic():
+    """The run file names the vendor that actually served the request.
+
+    An earlier revision reused AnthropicBackend for Bedrock and inherited its
+    `provider = "anthropic"` class attribute, so a Bedrock run wrote
+    "provider": "anthropic" into out/run.json -- a real-looking value naming a
+    company that did not answer, in a project whose claim is that its numbers
+    are checkable.
+    """
+    assert llm.BedrockConverseBackend.provider == "bedrock"
+    assert llm.AnthropicBackend.provider == "anthropic"
+    assert llm.GeminiBackend.provider == "gemini"
+    for name, cls in (("bedrock", llm.BedrockConverseBackend),
+                      ("anthropic", llm.AnthropicBackend),
+                      ("gemini", llm.GeminiBackend)):
+        assert cls.provider == name
+        assert cls.provider in llm.API_KEY_VARS
+
+
+def test_bedrock_without_a_region_says_so():
+    """Bedrock is region-scoped and model ids differ by region."""
+    env = {"AWS_ACCESS_KEY_ID": "AKIAEXAMPLE"}
+    with mock.patch.dict(os.environ, env, clear=True):
+        with pytest.raises(llm.LLMUnavailable) as e:
+            llm.build_client("bedrock")
+    assert "AWS_REGION" in str(e.value)
