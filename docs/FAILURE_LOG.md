@@ -970,3 +970,66 @@ how long the model chose to think. Thinking share held at 86.9% and 86.5%.
 The figure is quoted as a range now. It could have gone the other way -- two
 runs 30% apart would have meant the single number was never publishable -- and
 the point of running it was not knowing which. Both runs are committed.
+
+### A second vendor, found by testing the error message instead of reading it
+
+The vendor-swap claim rested on two Gemini models. Two models, one company, one
+SDK, one wire format -- a weaker test of "the model is a replaceable part" than
+the sentence implies. AWS credits made a genuine second vendor free to try, so
+it was tried.
+
+It refused four times, and each refusal was read as final before a test proved
+otherwise. That is the whole entry.
+
+**1. "Model access must be enabled in the console."** Written into an error
+message from memory. AWS had retired that page: serverless models now enable
+themselves on first invoke. The guidance pointed at something that no longer
+existed.
+
+**2. `output_config` looked like the likely blocker.** It was the unknown the
+whole attempt was time-boxed against -- whether the structured-output parameter
+survives a different transport. It was never the problem. Every failure reached
+the authorization layer, which means the request shape validated on the first
+try.
+
+**3. "Opus 5 is not available for this account."** Read as an entitlement
+problem for that model. Testing eight ids showed three different refusals:
+`INVALID_PAYMENT_INSTRUMENT` for the Marketplace-served models, "not available"
+for Opus 5 and Sonnet 5, and 404-Legacy for the older ones. Also that the bare
+`anthropic.` id form returns 400 and the `us.` inference profile is mandatory --
+which would have been a hardcoded guess otherwise.
+
+**4. "The account has no payment instrument, so no model will run."** This one
+was stated here as a recommendation to stop. It was wrong. `INVALID_PAYMENT_
+INSTRUMENT` is specific to models sold through the AWS Marketplace; Amazon's own
+Nova models bill against credits and answer fine. A probe across seven
+non-Anthropic models took two minutes and found four that work.
+
+The pattern in all four: an error message was treated as an explanation. Three
+of the four times, a two-minute probe contradicted it. The one that mattered
+most -- number four -- would have ended the attempt with the conclusion already
+written.
+
+**What the working path cost, once it was found.** `converse` has no
+structured-output parameter, so the schema is declared as a tool the model is
+forced to call and the arguments come back parsed; and usage is
+`inputTokens`/`outputTokens`, not `input_tokens`/`output_tokens`. Reading the
+Anthropic field names off a converse response yields `0 in / 0 out` beside a
+real note -- a run that looks free. Both are pinned by tests.
+
+**And a bug that would have published a false vendor name.** The first version
+reused `AnthropicBackend` for Bedrock, inheriting its `provider = "anthropic"`
+class attribute. The probe run printed `provider anthropic` while AWS served the
+request, and wrote that into `run.json`. Had the Anthropic models been entitled,
+that file would have been committed as cross-vendor evidence naming the wrong
+company -- in a project whose entire claim is that its numbers are checkable. It
+is the same class of error as the stub run that once overwrote `out/agent.json`,
+made one class further down, and it survived because no test asserted that a
+backend reports the vendor that actually served the request. One does now.
+
+**Result.** 19 of 19 notes accepted from `amazon.nova-lite-v1:0`, 0 guard
+rejections, and 0 of 504 verdict fields moved against the zero-model baseline.
+Input tokens double against Gemini because `converse` ships the schema in a tool
+definition on every call. No cost is quoted: Amazon's pricing pages are
+JavaScript-rendered and gave up no figure that could be confirmed for this
+region, and `PRICING` lists only prices that have been read.

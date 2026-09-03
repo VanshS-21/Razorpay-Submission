@@ -61,7 +61,7 @@ offline from a fresh clone and prints clean.
 | Unexplained bank rows | 30, all reported | 0 |
 | Throughput | 1,149 lines; 24k-51k lines/sec across nine runs, see [`eval/metrics.md`](eval/metrics.md) | |
 
-198 tests. No API key or network required for any of them.
+202 tests. No API key or network required for any of them.
 
 **Read the false-clear rate first.** It counts settlements the engine called
 reconciled that the answer key says needed a human. That is the expensive error:
@@ -251,7 +251,7 @@ python demo.py                      # everything, one command
 open out/report.html                # visual report, self-contained and offline
 
 pip install -e ".[dev]"             # adds pytest
-python -m pytest tests/ -q          # 198 tests
+python -m pytest tests/ -q          # 202 tests
 python eval/run_eval.py             # regenerate eval/metrics.md
 python eval/check_claims.py         # verify this README against a live run
 ```
@@ -289,25 +289,59 @@ jq '.findings[]|{settlement_id,disposition,reason_code,delta}' out/run.json
 only `explanation`, `action_required` and `resolved_by`, and no path re-enters
 the classifier.
 
-It has now been run against **two live models** on the same 126-settlement
-dataset — `gemini-3.5-flash` and `gemini-3.7-flash`
-([`out/agent.json`](out/agent.json),
-[`out/agent-second-model.json`](out/agent-second-model.json)):
+It has now been run against **two vendors and three live models** on the same
+126-settlement dataset — `gemini-3.5-flash` and `gemini-3.7-flash` on Google,
+and `amazon.nova-lite-v1:0` on AWS Bedrock ([`out/agent.json`](out/agent.json),
+[`out/agent-second-model.json`](out/agent-second-model.json),
+[`out/agent-bedrock-nova.json`](out/agent-bedrock-nova.json)):
 
 ```
-settlements where disposition / reason_code / delta differ:    0 of 126
-settlements where the explanation text differs:               19
-false clears, match rate, reason-code accuracy:         identical
+verdict fields compared (disposition, reason_code, delta, utr):  504
+verdict fields that moved:                                         0
+explanations rewritten by the model:                              19
+false clears, match rate, reason-code accuracy:             identical
 ```
 
-The second run is the more useful half, because it **failed**: 1 note out of 19,
-eleven errors, eight rate limits, and seven calls the circuit breaker never
-sent. One model wrote every note, the other wrote almost none, and the
-reconciliation came out byte-identical. A model layer that can fail that badly
-without moving a verdict is the claim, demonstrated rather than asserted.
+Two of those runs are more useful than a clean one would be.
 
-Still one vendor — Anthropic has never had a key here, so the Anthropic backend
-remains exercised only by the scripted stub.
+**The Gemini 3.7 run failed**: 1 note out of 19, eleven errors, eight rate
+limits, and seven calls the circuit breaker never sent. One model wrote every
+note, the other wrote almost none, and the reconciliation came out identical. A
+model layer that can fail that badly without moving a verdict is the claim,
+demonstrated rather than asserted.
+
+**The Bedrock run crosses a real vendor boundary**, not just a model one:
+another company, another SDK, another wire protocol, and a different mechanism
+for structured output — `converse` has no schema parameter, so the schema is
+declared as a tool the model is forced to call and the arguments come back
+parsed. Nova Lite is also a far smaller model than either frontier model above,
+which makes it the first genuine test the guard has had; it rejected 0 of 19.
+
+The transport shows up in the token profile, and only a real run reveals it:
+
+| | gemini-3.5-flash | nova-lite (Bedrock) |
+|---|---|---|
+| input tokens | 8,288 | 16,517 |
+| output tokens | 3,376 | 2,264 |
+| thinking tokens | 22,423 | 0 |
+| wall clock, 19 calls | 264s | 23.5s |
+
+Input **doubles** because `converse` ships the full JSON schema inside a tool
+definition on every call, where Gemini carries it in the request config. That is
+a property of the transport rather than the model. The wall-clock gap is not a
+speed comparison either — the Gemini figure is mostly deliberate pacing against
+a 5-requests-per-minute free tier.
+
+No cost is quoted for the Bedrock run. `PRICING` lists only models whose prices
+have been read, and Amazon's pricing pages did not yield a figure that could be
+confirmed for this region, so the run reports tokens and no dollar amount. An
+unknown price is reported as unknown.
+
+Anthropic's own models were tried on Bedrock first and refused: the
+Marketplace-served ones return `INVALID_PAYMENT_INSTRUMENT` on an account
+holding credits but no card, and Opus 5 and Sonnet 5 are not offered to it at
+all. So the Anthropic backend is still exercised only by the scripted stub. What
+changed is that the vendor-swap claim no longer rests on one company.
 
 `--llm-stub` drives the same code path with a scripted client that misbehaves on
 purpose: `honest`, `hallucinating`, `overreaching`, `failing`, `refusing`,
