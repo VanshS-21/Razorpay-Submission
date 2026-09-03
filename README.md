@@ -339,16 +339,12 @@ deliberate pacing against a 5-requests-per-minute free tier.
 **Nova 2 Lite reconciles the same batch for about 1/17th of the price**
 (~Rs 1.01 per 100 records against ~Rs 16.9), for verdicts that are identical to
 the token. Most of that gap is thinking: Gemini spends 87% of its output tokens
-reasoning before it writes, and the Nova models do not reason at all. Whether
-that reasoning buys anything here is not something this project measured — what
-it can say is that the arithmetic did not need it.
+reasoning before it writes, and the Nova models do not reason at all. The
+arithmetic did not need it.
 
 `nova-lite-v1` shows no cost because no price for it has been read. `PRICING`
-lists only prices actually read off a vendor's page, and the first figure found
-for these models was for the wrong model (`Nova 2 Lite`, not `Nova Lite`) in the
-wrong region (Ohio, not N. Virginia) — an authoritative page showing neither the
-model nor the region being priced. An unknown price is reported as unknown
-rather than assumed from a neighbour.
+carries only prices read off a vendor's page for the exact model and region that
+ran, so an unknown price stays unknown.
 
 Anthropic's own models were tried on Bedrock first and refused: the
 Marketplace-served ones return `INVALID_PAYMENT_INSTRUMENT` on an account
