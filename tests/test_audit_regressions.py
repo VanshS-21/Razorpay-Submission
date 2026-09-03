@@ -15,6 +15,7 @@ import csv
 import json
 import os
 import sys
+import types
 from unittest import mock
 from pathlib import Path
 
@@ -997,9 +998,26 @@ def test_converse_backend_reports_bedrock_not_anthropic():
 
 
 def test_bedrock_without_a_region_says_so():
-    """Bedrock is region-scoped and model ids differ by region."""
+    """Bedrock is region-scoped and model ids differ by region.
+
+    boto3 is stubbed into sys.modules rather than depended on. The first
+    version of this test asserted the region message and passed here only
+    because boto3 happened to be installed; on CI the import check fired first
+    and the assertion was never reached -- the test was checking a different
+    thing on each machine, which is the failure this file exists to catch.
+    """
+    fake_boto3 = types.ModuleType("boto3")
+    fake_boto3.client = lambda *a, **k: object()
+
     env = {"AWS_ACCESS_KEY_ID": "AKIAEXAMPLE"}
-    with mock.patch.dict(os.environ, env, clear=True):
+    with mock.patch.dict(sys.modules, {"boto3": fake_boto3}), \
+         mock.patch.dict(os.environ, env, clear=True):
         with pytest.raises(llm.LLMUnavailable) as e:
             llm.build_client("bedrock")
     assert "AWS_REGION" in str(e.value)
+
+    # ...and with a region it gets as far as constructing the client.
+    env["AWS_REGION"] = "us-east-1"
+    with mock.patch.dict(sys.modules, {"boto3": fake_boto3}), \
+         mock.patch.dict(os.environ, env, clear=True):
+        assert llm.build_client("bedrock").provider == "bedrock"
