@@ -7,10 +7,7 @@
 **Razorpay AI Buildathon — Track 04, AI Finance Controller**
 By [Vansh S](https://github.com/VanshS-21)
 
-**Demo video:** _(link goes here — paste the unlisted URL on this line)_
-<!-- Replace the italic text above with the URL. It is visible on purpose:
-     an HTML comment renders as nothing, so a missing video looked like no
-     video was ever planned. -->
+**Demo video (5 min):** https://youtu.be/t3oJpcwxqqg
 
 ---
 
