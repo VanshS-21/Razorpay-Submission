@@ -23,26 +23,26 @@ you run over, then cut.
 ## 1 · Bank statement row — 0:00
 
 - This is one line on a merchant's bank statement.
-- One credit, one amount.
-- Someone in the finance team has to work out whether it's right.
-- ↳ And you'd think that's a simple question.
+- One credit. One amount.
+- Somebody in finance has to work out whether it's right.
+- ↳ And you'd think that was a simple question.
 
 *Open cold. No name yet — that comes at the end.*
 
 ## 2 · "That is not a payment" — 0:10
 
-- It isn't, because that's not a payment.
-- It's one lump sum covering dozens of payments, minus fees, minus GST, minus
-  refunds and chargebacks.
+- It isn't. Because that's not a payment.
+- It's one lump sum covering dozens of them, minus fees, minus GST, minus refunds
+  and chargebacks.
 - Sometimes it's several payouts swept into one transfer, quoting a single
   reference number.
 - ↳ Which breaks the question you were about to ask.
 
 ## 3 · Which group, not which one — 0:22
 
-- Because *which settlement is this credit for* doesn't have an answer.
+- *Which settlement is this credit for* has no answer.
 - The real question is which **group** of settlements it covers.
-- And that's something you search for, not something you look up.
+- And that's a search. Not a lookup.
 - ✂ Which is why most merchants still do this by hand.
 - ↳ So — how do you actually check it?
 
@@ -51,15 +51,14 @@ you run over, then cut.
 ## 4 · Three sources — 0:35
 
 - You need three documents, and they come from three different places.
-- What Razorpay says it paid out. What actually landed in the bank. And what the
+- What Razorpay says it paid out. What actually landed in the bank. What the
   business thinks it sold.
 - They should match. They never do.
 - ↳ So this reconciles all three.
 
 ## 5 · `python demo.py` — 0:45
 
-- One command. No API key, no network, nothing installed beyond the standard
-  library.
+- One command. No API key, no network, nothing beyond the standard library.
 - A hundred and twenty-six settlements, about eleven hundred lines, in roughly
   five hundredths of a second.
 - ↳ *(pause two seconds)* And these are the numbers it gives you.
@@ -69,20 +68,20 @@ you run over, then cut.
 ## 6 · The SAFETY block — 1:15
 
 - This one first.
-- A false clear is when the engine says "this one's fine" and it wasn't.
+- A false clear is when the engine says "this one's fine" — and it wasn't.
 - Zero out of nineteen. And zero false escalates out of a hundred and seven.
-- ✂ That's the expensive mistake — money quietly going missing. Flagging
-  something unnecessarily just costs someone ten minutes.
+- ✂ That's the expensive mistake. Money quietly going missing. Flagging something
+  unnecessarily just costs somebody ten minutes.
 - ↳ Then the coverage.
 
 ## 7 · Coverage — 1:35
 
 - Match rate is just under eighty-five percent.
-- The other fifteen percent isn't failure — it's nineteen settlements that
+- The other fifteen percent isn't failure — that's nineteen settlements that
   genuinely need a person.
-- ✂ Plus thirty bank rows it couldn't tie to any payout, and reports rather than
-  guesses at.
-- ↳ And one more number, which I want you to be suspicious of.
+- ✂ Plus thirty bank rows it couldn't tie to any payout. It reports those rather
+  than guessing.
+- ↳ And one more number, which I'd like you to be suspicious of.
 
 ## 8 · The hook — 1:52
 
@@ -95,17 +94,17 @@ you run over, then cut.
 ## 9 · The exception — 2:05
 
 - Two payment lines disagree with the order ledger.
-- One order's booked at six hundred and twenty-four rupees, and the ledger says
-  five fifty-seven.
-- But the errors cancel out across the settlement.
+- One order's booked at six hundred and twenty-four rupees. The ledger says five
+  fifty-seven.
+- But across the settlement, the errors cancel out.
 - ↳ Which does something strange to the bottom line.
 
 ## 10 · Delta zero — 2:20
 
 - The delta is zero. Every total balances.
-- The payout ties, and the bank credit ties.
-- If you're only checking the bank against the payout, you can't see this at
-  all. You need the third source.
+- The payout ties. The bank credit ties.
+- If you're only checking the bank against the payout, you cannot see this. You
+  need the third source.
 - ↳ *(slow down here)* And this is what a person actually receives.
 
 ## 11 · The action line — 2:35
@@ -118,18 +117,17 @@ you run over, then cut.
 
 ## 12 · The rule — 2:45
 
-- Because my rule was that anything touching money is plain code and plain
+- Because I decided early: anything touching money is plain code and plain
   arithmetic.
 - The model only gets used where the problem is actually language.
 - ↳ In practice, that's a hard line.
 
 ## 13 · The boundary — 2:57
 
-- It can't compute an amount. It can't decide whether a settlement is
-  reconciled. It can't assign a reason code.
+- It can't compute an amount. Can't decide whether a settlement is reconciled.
+  Can't assign a reason code.
 - What it *does* do is write the nineteen exception notes a human has to act on.
-- ✂ Money's stored as whole paise the whole way through. No floats anywhere
-  near it.
+- ✂ Money's whole paise the whole way through. No floats anywhere near it.
 - ↳ And I don't trust it to do even that much unchecked.
 
 *Say the "did not" half out loud. Where a model is absent is a decision, and
@@ -138,41 +136,41 @@ it is worth as much airtime as where one is present.*
 ## 14 · The guard — 3:12
 
 - So this is a fake client that invents a rupee figure in every single note.
-- Nineteen out of nineteen rejected. And not one verdict moved.
+- Nineteen out of nineteen rejected. Not one verdict moved.
 - ↳ That's a model failing on purpose. Here's what real ones did.
 
 ## 15 · Four models, two vendors — 3:30
 
 - Four live models, two vendors — Google and AWS.
 - Five hundred and four verdict fields compared. Zero moved.
-- ✂ One of those models failed eighteen of its nineteen calls, and the books
-  still closed identically.
+- ✂ One of those models failed eighteen of its nineteen calls, and the books still
+  closed identically.
 - ↳ Which brings me back to that hundred percent.
 
 ---
 
 ## 16 · Back to the 100% — 3:45
 
-- I wrote the thing that creates the problems, and I wrote the thing that finds
-  them.
+- Here's the thing. I wrote the code that creates the problems — and I wrote the
+  code that finds them.
 - So all that number tells you is that two versions of my own assumptions agree.
-- ↳ So I tried to break it.
+- ↳ So I went looking for a way to break it.
 
 ## 17 · The holdout failing — 3:58
 
 - A second dataset, with two things wrong in every settlement.
-- It failed straight away. Thirty-three percent false clears — four out of
+- It failed on the first run. Thirty-three percent false clears — four out of
   twelve.
-- Both causes were real bugs. I'd written a three-way reconciler that only did
+- Both causes were real bugs. I'd built a three-way reconciler that only did
   three-way in the direction money comes in.
 - ↳ That wasn't the worst one, though.
 
 ## 18 · The claim that was false — 4:15
 
 - The claim I was proudest of turned out to be false. My guard was re-running a
-  test the matcher had already failed, so everything passed it.
+  test the matcher had already failed — so everything passed it.
 - ✂ And the test protecting that couldn't fail either.
-- Both fixed, both pinned with tests. The log has all of it in the order it
+- Both fixed. Both pinned with tests. The log has all of it in the order it
   happened, with the wrong paragraphs left in.
 - ↳ And there's one more I'll say myself, before you have to find it.
 
@@ -184,12 +182,13 @@ it is worth as much airtime as where one is present.*
 
 - Once I fixed the engine using that holdout, it stopped being unseen data. It's
   training data now.
-- The README says that right next to the number.
+- That's not an independent measurement, and the README says so right next to the
+  number.
 - ↳ What I can tell you is that everything here is checkable.
 
 ## 20 · Checkable — 4:47
 
-- Two hundred and two tests, no key and no network.
+- Two hundred and two tests. No key, no network.
 - And a script that checks the README's numbers against a live run — so if I've
   overstated anything in there, it fails.
 - ↳ That's it.
